@@ -1,0 +1,119 @@
+module Plasmacore
+
+class Texture
+  PROPERTIES
+    filepath      : String
+    id            : Int32    # id in loading display context
+    image_size    : XY       # In pixels
+    texture_size  : XY       # In pixels
+    uv_size       : XY       # (1,1) in most cases
+    is_opaque     : Logical
+
+  GLOBAL METHODS
+    method create( name:String )->Texture
+      local texture = Display.textures_by_name[ name ]
+      if (texture) return texture.load
+
+      local filepath = Plasmacore.asset_filepath( name )
+      if (filepath)
+        texture = Display.textures_by_name[ filepath ]
+        if (texture) return texture.load
+
+        Log.println "Loading " + filepath
+        texture = Texture( File(filepath) )
+        Display.textures_by_name[ filepath ] = texture
+      else
+        Log.println "File not found: " + name
+        texture = Texture( Bitmap(1,1,Color.WHITE) )
+      endIf
+
+      Display.textures_by_name[ name ] = texture
+      return texture
+
+  METHODS
+    method init( file:File )
+      filepath = file.filepath
+      load
+
+    method init( bitmap:Bitmap )
+      set( bitmap )
+
+    method clean_up
+      unload
+
+    method image_height->Int32 [macro]
+      this.image_size.y
+
+    method image_width->Int32 [macro]
+      this.image_size.x
+
+    method is_loaded->Logical
+      return id?
+
+    method load->this
+      if (id) return this
+
+      local bitmap = Bitmap( File(filepath) )
+      image_size = bitmap.size
+
+      is_opaque = bitmap.is_opaque
+      if (not is_opaque) bitmap.premultiply_alpha
+      bitmap.expand_to_power_of_two
+
+      texture_size = bitmap.size
+      uv_size = image_size / texture_size
+
+      id = Display.define_texture( id, bitmap, 32 )
+      Display.texture_list.add( this )
+
+      return this
+
+    method set( bitmap:Bitmap )
+      local original_bitmap = bitmap
+
+      is_opaque = bitmap.is_opaque
+      if (not is_opaque)
+        bitmap = bitmap.cloned
+        bitmap.premultiply_alpha
+      endIf
+
+      if (not bitmap.size.is_power_of_two)
+        if (bitmap is original_bitmap) bitmap = bitmap.cloned
+        bitmap.expand_to_power_of_two
+      endIf
+
+      image_size = bitmap.size
+
+      if (not id)
+        # First time being defined - otherwise this same texture is being redefined
+        # from an updated bitmap.
+        Display.texture_list.add( this )
+      endIf
+
+      texture_size = bitmap.size
+      uv_size = image_size / texture_size
+
+      id = Display.define_texture( id, bitmap, 32 )
+
+    method texture_height->Int32 [macro]
+      this.texture_size.y
+
+    method texture_width->Int32 [macro]
+      this.texture_size.x
+
+    method unload->this
+      if (id)
+        Display.delete_texture( id )
+        Display.texture_list.remove( this )
+        id = 0
+      endIf
+      return this
+
+    method uv_height->Real64 [macro]
+      this.uv_size.y
+
+    method uv_width->Real64 [macro]
+      this.uv_size.x
+endClass
+
+

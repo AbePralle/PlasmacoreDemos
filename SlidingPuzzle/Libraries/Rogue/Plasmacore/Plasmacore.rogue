@@ -1,0 +1,186 @@
+#==============================================================================
+# Plasmacore.rogue
+#==============================================================================
+
+$include "Anchor.rogue"
+$include "Bitmap.rogue"
+$include "Box.rogue"
+$include "Color.rogue"
+$include "JPEG.rogue"
+$include "PNG.rogue"
+$include "XY.rogue"
+
+$if not "Console"
+
+$include "ActionCmd.rogue"
+$include "Assets.rogue"
+$include "Corners.rogue"
+$include "Display.rogue"
+$include "Event.rogue"
+$include "Font.rogue"
+$include "UI"
+$include "Image.rogue"
+$include "ImageList.rogue"
+$include "ImageSheetBuilder.rogue"
+$include "Keyboard.rogue"
+$include "Matrix.rogue"
+$include "Messaging.rogue"
+$include "Log.rogue"
+$include "OverlayLog.rogue"
+$include "ProgressFn.rogue"
+$include "ProjectionMode.rogue"
+$include "Quaternion.rogue"
+$include "RenderMode.rogue"
+$include "Rotation.rogue"
+$include "Shader.rogue"
+$include "Sprite.rogue"
+$include "State.rogue"
+$include "SystemFont.rogue"
+$include "TargetValue.rogue"
+$include "Texture.rogue"
+$include "UpdateTimer.rogue"
+$include "View.rogue"
+$include "Window.rogue"
+$include "XYZ.rogue"
+$include "XYZW.rogue"
+
+module Plasmacore
+
+class Plasmacore [essential singleton]
+  PROPERTIES
+    default_asset_folder    = ""
+
+    next_resource_id        = 1
+    display_view_types      = StringTable<<TypeInfo>>()
+    global_update_callback  : Function()
+    global_update_timer     = UpdateTimer()
+    launch_window_name      : String
+    displays                = StringTable<<Display>>()
+
+    image_manifest          : ValueTable
+    #image_group_info_lookup = @{}
+    image_info_lookup       = @{}
+
+    cache_folder : String
+    data_folder  : String
+
+  METHODS
+    method init
+      Console.println "Initializing Plasmacore"
+
+      load_image_manifest
+
+      MessageManager.add_listener( "Application.launch",
+        function(m:Message)
+          if (m.logical("is_window_based"))
+            if (Plasmacore.launch_window_name)
+              Window( Plasmacore.launch_window_name ).show
+            else
+              Console.println "Launch note: Plasmacore.launch_window_name not set for a window-based application."
+            endIf
+          endIf
+        endFunction )
+
+        MessageManager.add_listener( "Display.render",
+        function(m:Message)
+          Display( m.string("display_name") ).render( XY(m.int32("display_width"),m.int32("display_height")) )
+        endFunction )
+
+        MessageManager.add_listener( "Display.on_pointer_event",
+          function(m:Message)
+            local display = Display( m.string("display_name") )
+            local scale = display.display_scale
+            local pos   = XY( m.int32("x"), m.int32("y") ) * scale
+            local delta = XY( m.real64("dx"), m.real64("dy") ) * scale
+            local e = PointerEvent( m.int32("type"), pos, delta,
+              m.int32("index"), m.int32("id") )
+            display.handle( e )
+          endFunction )
+
+    method asset_file( name:String )->File
+      local filepath = asset_filepath( name )
+      if (not filepath) return null
+      return File( filepath )
+
+    method asset_filepath( name:String )->String
+      if (File.exists(name)) return name   # already correct
+
+      local filepath = native( "Plasmacore_find_asset( $name )" )->String
+      if (filepath) return filepath
+
+      name = "Assets/Images/" + name
+      return native( "Plasmacore_find_asset( $name )" )->String
+
+    method cache_folder->String
+      if (not @cache_folder)
+        cache_folder = native( "Plasmacore_get_library_folder()" )->String + "/Caches"
+      endIf
+      return @cache_folder
+
+    method create_resource_id->Int32
+      ++next_resource_id
+      return (next_resource_id - 1)
+
+    method data_folder->String
+      if (not @data_folder)
+        data_folder = native( "Plasmacore_get_documents_folder()" )->String
+      endIf
+      return @data_folder
+
+    method display( name:String )->Display
+      local result = displays[ name ]
+      if (not result)
+        result = Display()
+        result.name = name
+        Plasmacore.displays[ name ] = result
+      endIf
+      return result
+
+      #method find_image_group_info( name:String )->Value
+      #return image_group_info_lookup[ name ]
+
+    method find_image_info( name:String )->Value
+      return image_info_lookup[ name ]
+
+    method global_update
+      global_update_timer.update
+      while (global_update_timer.tick)
+        if (global_update_callback) global_update_callback()
+      endWhile
+
+    method index_assets
+      image_info_lookup = @{}
+      forEach (group_info in Plasmacore.image_manifest["groups"])
+        forEach (image_info in group_info["images"])
+          local name = image_info["name"]->String
+          image_info_lookup[ name ] = image_info
+          if (name.begins_with(default_asset_folder))
+            image_info_lookup[ name.after_first(default_asset_folder) ] = image_info
+          endIf
+          image_info_lookup[ File.filename(name) ] = image_info
+        endForEach
+      endForEach
+
+    method load_image_manifest
+      image_manifest = ValueTable.load( asset_file("ImageManifest.json") )
+      index_assets
+
+    method on_global_update( global_update_callback )
+      noAction
+
+    method set_default_asset_folder( folder:String )->this
+      if (not folder) folder = ""
+      if (default_asset_folder == folder) return this
+
+      if (folder.count) folder = File.ensure_ends_with_separator( folder )
+      @default_asset_folder = folder
+      index_assets
+      return this
+
+endClass
+
+nativeCode extern "C" RogueString* Plasmacore_find_asset( RogueString* name );
+nativeCode extern "C" RogueString* Plasmacore_get_documents_folder();
+nativeCode extern "C" RogueString* Plasmacore_get_library_folder();
+
+$endIf  # not Console

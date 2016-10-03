@@ -1,0 +1,240 @@
+module Plasmacore
+
+class XY( x:Real64, y:Real64 ) [compound]
+  GLOBAL METHODS
+    method create->XY
+      return XY( 0, 0 )
+
+    method create( n:Real64 )->XY
+      return XY( n, n )
+
+    method create( m:Real64, angle:Radians )->XY
+      return XY( m * angle.cos, m * angle.sin )
+
+    method create( m:Real64, angle:Degrees )->XY
+      return XY( m * angle.cos, m * angle.sin )
+
+    method create( value:Value )->XY
+      if (not value) return XY(0,0)
+
+      if (value.is_list)
+        return XY( value[0]->Real64, value[1]->Real64 )
+      elseIf (value.is_table)
+        if (value.contains("x")) return XY( value//x->Real64, value//y->Real64 )
+        else                     return XY( value//width->Real64, value//height->Real64 )
+      elseIf (value.is_number)
+        local n = value->Real64
+        return XY( n, n )
+      endIf
+
+      return XY(0,0)
+
+  METHODS
+    method abs->XY
+      return XY( select{x>=0:x||-x}, select{y>=0:y||-y} )
+
+    method ceiling->XY
+      return XY( Math.ceiling(x), Math.ceiling(y) )
+
+    method clamped( low=null:Real64?, high=null:Real64? )->XY
+      # Adjusts both x and y to be within the given limits
+      local new_x = x
+      local new_y = y
+      if (low.exists)
+        if (new_x < low.value) new_x = low.value
+        if (new_y < low.value) new_y = low.value
+      endIf
+      if (high.exists)
+        if (new_x > high.value) new_x = high.value
+        if (new_y > high.value) new_y = high.value
+      endIf
+      return XY( new_x, new_y )
+
+    method clamped( box:Box )->XY
+      # Adjusts this point to be within the boundaries of the given box.
+      local vx = x
+      local vy = y
+      local x1 = box.x1
+      local y1 = box.y1
+      local x2 = box.x2
+      local y2 = box.y2
+
+      if (vx < x1)     vx = x1
+      elseIf (vx > x2) vx = x2
+
+      if (vy < y1)     vy = y1
+      elseIf (vy > y2) vy = y2
+
+      return XY(vx,vy)
+
+    method cross( other:XY )->Real64
+      return x * other.y - y * other.x
+
+    method degrees->Degrees [macro]
+      Degrees( this.radians )
+
+    method distance_to( other:XY )->Real64
+      return (other - this).magnitude
+
+    method dot( other:XY )->Real64
+      return x * other.x + y * other.y
+
+    method floor->XY
+      return XY( Math.floor(x), Math.floor(y) )
+
+    method has_magnitude_greater_than( n:Real64 )->Logical
+      # Equivalent to and faster than v.magnitude >= n
+      return x*x + y*y >= n*n
+
+    method has_magnitude_less_than( n:Real64 )->Logical
+      # Equivalent to and faster than v.magnitude <= n
+      return x*x + y*y <= n*n
+
+    method is_non_zero->Logical
+      return x or y
+
+    method is_power_of_two->Logical
+      return x.is_power_of_two and y.is_power_of_two
+
+    method is_zero->Logical
+      return x == 0 and y == 0
+
+    method magnitude->Real64 [macro]
+      Math.sqrt( x*x + y*y )
+
+    method magnitude_squared->Real64
+      return x*x + y*y
+
+    method max->Real64
+      return select{ x>=y:x || y }
+
+    method min->Real64
+      return select{ x<=y:x || y }
+
+    method max( other:XY )->XY
+      # Returns an XY containing the max X and the max Y of 'this' and 'other'.
+      return XY( Math.max(x,other.x), Math.max(y,other.y) )
+
+    method min( other:XY )->XY
+      # Returns an XY containing the min X and the min Y of 'this' and 'other'.
+      return XY( Math.min(x,other.x), Math.min(y,other.y) )
+
+    method normal->XY
+      # Returns the normal of the this vector.
+      return XY( -y, x )
+
+    method normalized->XY [macro]
+      XY( 1.0, this.radians )
+
+    method operator+( other:XY )->XY
+      return XY( x+other.x, y+other.y )
+
+    method operator+( value:Real64 )->XY
+      return XY( x+value, y+value )
+
+    method operator-()->XY
+      return XY( -x, -y )
+
+    method operator-( other:XY )->XY
+      return XY( x-other.x, y-other.y )
+
+    method operator-( value:Real64 )->XY
+      return XY( x-value, y-value )
+
+    method operator*( other:XY )->XY
+      return XY( x*other.x, y*other.y )
+
+    method operator*( value:Real64 )->XY
+      return XY( x*value, y*value )
+
+    method operator/( other:XY )->XY
+      return XY( x/other.x, y/other.y )
+
+    method operator/( value:Real64 )->XY
+      return XY( x/value, y/value )
+
+    method operator%( other:XY )->XY
+      return XY( x%other.x, y%other.y )
+
+    method operator%( value:Real64 )->XY
+      return XY( x%value, y%value )
+
+    method operator^( other:XY )->XY
+      return XY( x^other.x, y^other.y )
+
+    method operator^( value:Real64 )->XY
+      return XY( x^value, y^value )
+
+    method parallelum( axis:XY )->XY
+      # Returns the component of this vector that lies along the axis defined
+      # by the parameter.
+      return (this.dot(axis) / axis.dot(axis)) * axis
+
+    method perpendiculum( axis:XY )->XY
+      # Returns the component of this vector that lies perpendicular to the axis defined
+      # by the parameter.
+      return this - this.parallelum( axis )
+
+    method product->Real64
+      return x * y
+
+    method radians->Radians
+      return Radians( Math.atan2( y, x ) )
+
+    method rotated( angle:Degrees )->XY [macro]
+      XY( this.magnitude, angle )
+
+    method rotated( angle:Radians )->XY [macro]
+      XY( this.magnitude, angle )
+
+    method round->XY
+      return (this + 0.5).floor
+
+    method to->String
+      local n = 0
+      if (x != Math.floor(x) or y != Math.floor(y))
+        ++n
+        local p10 = 10 ^ n
+        while (n < 9 and Math.floor(Math.abs(x*p10))%10 == 0 and Math.abs(Math.floor(y*p10)%10) == 0)
+          ++n
+        endWhile
+        if (n == 9) n = 0
+      endIf
+      return StringBuilder().print( "[" ).print( x, n ).print( "," ).print( y, n ).print( "]" )->String
+
+    method to->Value( &integer )
+      if (integer)
+        return @{ x:x->Int32, y:y->Int32 }
+      else
+        return @{ x:x, y:y }
+      endIf
+
+    method xv->XY
+      return XY(x,0)
+
+    method yv->XY
+      return XY(0,y)
+
+    method yx->XY
+      return XY(y,x)
+
+  GLOBAL METHODS
+    method operator+( value:Real64, v:XY )->XY
+      return XY( value+v.x, value+v.y )
+
+    method operator-( value:Real64, v:XY )->XY
+      return XY( value-v.x, value-v.y )
+
+    method operator*( value:Real64, v:XY )->XY
+      return XY( value*v.x, value*v.y )
+
+    method operator/( value:Real64, v:XY )->XY
+      return XY( value/v.x, value/v.y )
+
+    method operator%( value:Real64, v:XY )->XY
+      return XY( value%v.x, value%v.y )
+
+    method operator^( value:Real64, v:XY )->XY
+      return XY( value^v.x, value^v.y )
+endClass
+

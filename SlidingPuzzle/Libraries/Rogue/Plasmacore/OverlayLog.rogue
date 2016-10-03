@@ -1,0 +1,54 @@
+module Plasmacore
+
+class OverlayLog : PrintWriter<<output_buffer>> [essential singleton]
+  PROPERTIES
+    lines = String[]
+    timer = Timer(6)  # time until lines removed
+    output_buffer = StringBuilder()
+    max_lines = 20 : Int32?
+
+  METHODS
+    method init
+      Global.standard_output = this
+
+    method clear->this
+      lines.clear
+      return this
+
+    method draw
+      local font = SystemFont
+      font.load
+      local disp = Display
+      local max = Display.height / font.height
+      if (max_lines.exists and max_lines.value < max) max = max_lines.value
+      while (lines.count > max) lines.remove_first
+
+      font.scale = Display.size.max / 1024.0
+
+      local t = timer.remaining
+      if (t >= 0 and t <= 1.0)
+        font.color = Color( 1.0, 1.0, 1.0, t )
+      else
+        font.color = Color.WHITE
+      endIf
+
+      font.anchor = Anchor.TOP_LEFT
+
+      forEach (line at j in lines)
+        font.draw( line, XY(0,j*font.height) )
+      endForEach
+
+    method update
+      if (timer.is_expired) lines.clear
+
+    method write( buffer:StringBuilder )->this
+      timer.restart
+      Console.write( buffer )  # echo the message to the console
+      if (buffer.contains('\n'))
+        forEach (line in LineReader(buffer->String)) lines.add( line )
+      else
+        lines.add( buffer->String )
+      endIf
+      return this
+endClass
+
