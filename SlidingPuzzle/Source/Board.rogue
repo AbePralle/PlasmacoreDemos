@@ -1,0 +1,79 @@
+using Plasmacore
+
+class Board
+  PROPERTIES
+    picture         : Image
+    picture_opacity = TargetValue<<Real64>>( 1, 0.5, ProgressFn.QUADRATIC )
+    bounds          : Box
+
+    pieces_per_side : Int32
+    piece_size      : Real64
+    pieces          = Piece[]
+    corner_piece    : Piece
+
+    previous_random_move : XY
+
+  METHODS
+    method init( picture, pieces_per_side )
+      piece_size = picture.size.x / pieces_per_side
+      forEach (j in 0..<pieces_per_side)
+        forEach (i in 0..<pieces_per_side)
+          pieces.add( Piece(this, picture, XY(i,j), piece_size) )
+        endForEach
+      endForEach
+      corner_piece = pieces.last
+      corner_piece.is_empty = true
+
+    method draw( center:XY )
+      bounds = picture.bounds_at( center )
+      bounds.fill( Color.BLACK )
+
+      (forEach in pieces).draw( bounds.top_left )
+
+      picture.opacity = picture_opacity.value
+      picture.draw( center )
+
+    method find_piece( position:XY )->Piece
+      if (not bounds.contains(position)) return null
+      return this[ (position - bounds.top_left) / piece_size ]
+
+    method get( location:XY )->Piece
+      location = location.floor
+      if (location != location.clamped(0,pieces_per_side-1)) return null
+      return pieces[ location.y*pieces_per_side + location.x ]
+
+    method is_animating->Logical
+      if ((forEach in pieces).is_animating) return true
+      return false
+
+    method is_solved->Logical
+      if (is_animating) return false
+      if (not (forEach in pieces).is_solved) return false
+      return true
+
+    method make_random_move->Logical
+      forEach (piece in pieces.shuffled)
+        if (not piece.is_empty)
+          if (make_random_move(piece,XY(0,1)))  return true
+          if (make_random_move(piece,XY(0,-1))) return true
+          if (make_random_move(piece,XY(1,0)))  return true
+          if (make_random_move(piece,XY(-1,0))) return true
+        endIf
+      endForEach
+      return false
+
+    method make_random_move( piece:Piece, delta:XY )->Logical
+
+      # Don't let the next random move be the opposite of the previous random move
+      if (delta == -previous_random_move) return false
+
+      if (not piece.move(delta)) return false
+      previous_random_move = delta
+      return true
+
+    method swap( a:Piece, b:Piece )
+      pieces.swap( a.index, b.index )
+      local temp = a.location.value
+      a.location.target_value = b.location.value
+      b.location.target_value = temp
+endClass

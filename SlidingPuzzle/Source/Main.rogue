@@ -1,36 +1,48 @@
+$include "Board.rogue"
+$include "Piece.rogue"
+$include "State.rogue"
+
 using Plasmacore
 
-Display( "Main" ).view = MainView()
+Runtime.gc_logging = true
+Display( "Main" ).view = MainView
 
-class MainView : View
+class MainView : View [singleton]
   PROPERTIES
+    board   : Board
+    actions : ActionCmd
+    font    = Font( "Font.png" )
+    message_opacity = TargetValue<<Real64>>( 0.0, &duration=0.5 )
 
   METHODS
     method on_start
-      change_state( InitialState() )
+      board = Board( Image("Picture.png"), 4 )
+      Display.scale_to_fit( board.picture.size )
 
-    method on( e:PointerEvent )
-      if (e.is_press or e.is_move or e.is_release)
-        trace e.position
+      actions += ActionCmdWait(1.0) ...
+      +  ActionCmd( ()=>MainView.message_opacity.target_value = 1 ) ...
+      +  ActionCmdWait(1.0) ...
+      +  ActionCmd( ()=>MainView.message_opacity.target_value = 0 )
+
+      change_state( ShowSolvedState() )
+
+    method on_draw
+      Display.clear( 0xFF404040 )
+      board.draw( Display.center )
+
+      if (message_opacity.value)
+        font.opacity = message_opacity.value
+        font.anchor = Anchor.CENTER
+        font.color = Color.BLACK
+        font.draw( "Sliding Puzzle", Display.center + 4 )
+        font.color = Color.WHITE
+        font.draw( "Sliding Puzzle", Display.center )
       endIf
 
-    method on_draw
-      Display.clear( Color.BLUE )
-
     method on_update
       # Called 60 times a second
+      if (actions) actions = actions.update
+
 endClass
 
-
-class InitialState : State<<MainView>>
-  METHODS
-    method after_draw
-      # This happens after the current view's on_draw()
-
-    method on_draw
-      # This happens before the current view's on_draw()
-
-    method on_update
-      # Called 60 times a second
-endClass
 

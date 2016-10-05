@@ -4,6 +4,7 @@
 
 Test
 Local.mk
+DevUpdate.mk
 
 # Mac
 .DS_Store

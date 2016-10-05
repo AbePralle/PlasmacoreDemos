@@ -1,0 +1,54 @@
+using Plasmacore
+
+class Piece
+  PROPERTIES
+    board           : Board
+    image           : Image
+    piece_size      : Real64
+    solved_location : XY
+    location        = TargetValue<<XY>>( XY(0,0), 0.25, ProgressFn.QUADRATIC )
+    opacity         = TargetValue<<Real64>>( 1.0, 0.25, ProgressFn.QUADRATIC )
+    is_empty        : Logical
+
+  METHODS
+    method init( board, picture:Image, solved_location, piece_size )
+      location.value = solved_location
+      image = Image( picture, Box(solved_location*piece_size+1, piece_size-2, piece_size-2) )
+      image.anchor = Anchor.TOP_LEFT
+
+    method draw( top_left:XY )
+      if (not is_empty)
+        image.opacity = opacity.value
+        image.draw( top_left + location.value * piece_size + 1 )
+      endIf
+
+    method index->Int32
+      # Current linear index
+      return location.target_value.y * board.pieces_per_side + location.target_value.x
+
+    method is_animating->Logical
+      return location.value != location.target_value
+
+    method is_solved->Logical
+      return (location.value == solved_location)
+
+    method move( delta:XY )->Logical
+      if (board.is_animating) return false
+      if (is_empty) return false
+      local swap_piece = board[ location.target_value + delta ]
+      if (not swap_piece or not swap_piece.is_empty) return false
+      board.swap( this, swap_piece )
+      return true
+
+    method move_up->Logical
+      return move( XY(0,-1) )
+
+    method move_right->Logical
+      return move( XY(1,0) )
+
+    method move_down->Logical
+      return move( XY(0,1) )
+
+    method move_left->Logical
+      return move( XY(-1,0) )
+endClass

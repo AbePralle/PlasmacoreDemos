@@ -1,0 +1,90 @@
+using Plasmacore
+
+# Every Display has a View (like a scene) and every View has a current
+# State.  Typically the view contains the data model, manages assets such
+# as images, and contains the rendering logic.  States are the "control"
+# for the view and are intended to be lightweight, fairly transient objects.
+# A state gets first shot at every event that then gets sent to the view.
+# For example, State.on(PointerEvent) is called first, then View.on(PointerEvent),
+# and finally View.after(PointerEvent).  You can `.consume()` an event at
+# any time to stop it from propagating.
+
+class PuzzleState : State<<MainView>>
+  # The <<MainView>> type parameter means that when our state methods access
+  # the containing 'view' it is automatically cast to type 'MainView'.
+endClass
+
+class ShowSolvedState : PuzzleState
+  METHODS
+    method on_start
+      view.board.picture_opacity.target_value = 1.0
+
+    method on( e:PointerEvent )
+      if (e.is_press)
+        change_state( HideSolvedState() + ShuffleState() )
+      endIf
+endClass
+
+
+class HideSolvedState : PuzzleState
+  METHODS
+    method on_start
+      view.board.picture_opacity.target_value = 0
+
+    method on_update
+      if (view.board.picture_opacity.value == 0) exit_state
+endClass
+
+
+class ShuffleState : PuzzleState
+  PROPERTIES
+    shuffle_count = 30
+
+  METHODS
+    method on_start
+      # Move pieces quickly
+      (forEach in view.board.pieces).location.duration = 0.10
+
+    method on_finish
+      # Move pieces more slowly
+      (forEach in view.board.pieces).location.duration = 0.25
+
+    method on_update
+      if (shuffle_count)
+        if (view.board.make_random_move) --shuffle_count
+      else
+        local top_left_piece = view.board[ XY(0,0) ]
+        if (top_left_piece.location.value == top_left_piece.solved_location)
+          view.board.make_random_move
+        else
+          change_state( PlayState() )
+        endIf
+      endIf
+endClass
+
+
+class PlayState : PuzzleState
+  METHODS
+    method on( e:PointerEvent )
+      local piece = view.board.find_piece( e.position )
+      if (piece)
+        contingent
+          sufficient (piece.move_up)
+          sufficient (piece.move_right)
+          sufficient (piece.move_down)
+          sufficient (piece.move_left)
+        endContingent
+      endIf
+
+    method on_update
+      if (view.board.is_solved) change_state( ShowSolvedState() )
+
+endClass
+
+
+class WaitForTouchState : PuzzleState
+  METHODS
+    method on( e:PointerEvent )
+      if (e.is_press) exit_state
+endClass
+
