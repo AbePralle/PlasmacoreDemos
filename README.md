@@ -1,7 +1,7 @@
 # Sliding Puzzle Demo
 - v1.0
 - October 20, 2016
-- Made with the [https://github.com/AbePralle/Plasmacore](Plasmacore) game programming framework
+- Made with the [Plasmacore](https://github.com/AbePralle/Plasmacore) game programming framework
 
 ## Requirements
 - Mac with Xcode and iOS SDK
