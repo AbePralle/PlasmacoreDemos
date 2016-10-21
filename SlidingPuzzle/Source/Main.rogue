@@ -1,47 +1,74 @@
+#==============================================================================
+# Sliding Puzzle Demo
+# October 5, 2016 by Abe Pralle
+#
+# Built with Plasmacore
+# https://github.com/AbePralle/Plasmacore
+#
+# Source code: released to the Public Domain.
+# Image: Copyright 2016 Plasmaworks LLC, used with permission
+#==============================================================================
+
 $include "Board.rogue"
+$include "Messages.rogue"
 $include "Piece.rogue"
 $include "State.rogue"
 
 using Plasmacore
 
-Runtime.gc_logging = true
+# Specify program starting point.
 Display( "Main" ).view = MainView
+
+# A Display is an abstraction of a physical window or screen and provides a
+# way to render graphical primitives.  A View is like a "scene" or "modelview"
+# in some APIs.  Custom views are created that manage image assets, some or
+# all of a program's data model, and implement most or all of the drawing
+# logic.
 
 class MainView : View [singleton]
   PROPERTIES
-    board   : Board
-    actions : ActionCmd
-    font    = Font( "Font.png" )
-    message_opacity = TargetValue<<Real64>>( 0.0, &duration=0.5 )
+    board : Board
+    # The data model for this puzzle
+
+    font = Font( "Font.png" )
+    # The "Font.png" and "Picture.png" image assets were placed in Assets/Images
+    # and then the image compiler phase of the project build automatically
+    # created an image configuration in Assets/Images/ImageConfig.txt
+    #
+    # Project assets are "compiled" at build time: images are consolidated on
+    # image sheets (texture atlases) by group and meta-info is written to a data
+    # file called "ImageManifest.json".
+    #
+    # See "ImageConfig.txt" for more info.
 
   METHODS
     method on_start
+      # on_start is always called when a new View becomes active.  For views it
+      # is a better place to initialize things than than the init() constructor
+      # for timing purposes, or in other words the view update cycle starts when
+      # on_start() is called, not when init() is called.
       board = Board( Image("Picture.png"), 4 )
+
+      # You can scale the coordinate system to any size.  If you write
+      # Display.scale_to_fit(320,480) on a portrait mode display, the width
+      # will be 320 units and the height will be greater than or equal to
+      # 480 units.  Images are sized according to the coordinate system
+      # but no pixel resolution is actually gained or lost.
       Display.scale_to_fit( board.picture.size )
 
-      actions += ActionCmdWait(1.0) ...
-      +  ActionCmd( ()=>MainView.message_opacity.target_value = 1 ) ...
-      +  ActionCmdWait(1.0) ...
-      +  ActionCmd( ()=>MainView.message_opacity.target_value = 0 )
+      Messages.add( "Sliding Puzzle Demo", &initial_delay=1 )
+      Messages.add( "Tap to shuffle" )
 
       change_state( ShowSolvedState() )
 
     method on_draw
       Display.clear( 0xFF404040 )
       board.draw( Display.center )
-
-      if (message_opacity.value)
-        font.opacity = message_opacity.value
-        font.anchor = Anchor.CENTER
-        font.color = Color.BLACK
-        font.draw( "Sliding Puzzle", Display.center + 4 )
-        font.color = Color.WHITE
-        font.draw( "Sliding Puzzle", Display.center )
-      endIf
+      Messages.draw
 
     method on_update
       # Called 60 times a second
-      if (actions) actions = actions.update
+      Messages.update
 
 endClass
 

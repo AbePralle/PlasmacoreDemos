@@ -25,9 +25,6 @@ routine configure_ios_build_folder
   local output_folder = "Build/iOS/Source"
   File.create_folder( output_folder )
 
-  copy_newer( "Plasmacore.swift",                   "Libraries/Plasmacore/Swift", output_folder )
-  copy_newer( "PlasmacoreMessage.swift",            "Libraries/Plasmacore/Swift", output_folder )
-  copy_newer( "PlasmacoreViewController-iOS.swift", "Libraries/Plasmacore/Swift", output_folder )
   copy_newer( "RogueInterface.h",                   "Libraries/Plasmacore/Swift", output_folder )
   copy_newer( "RogueInterface.mm",                  "Libraries/Plasmacore/Swift", output_folder )
 endRoutine
@@ -51,7 +48,9 @@ routine compile( target:String )
 
   if (not need_compile(output_folder)) return
 
-  if (System.run(''roguec --target=C++,$ Source/Main.rogue Plasmacore --libraries=Libraries/Rogue --output=$/RogueProgram'' (target,output_folder)))
+  local exe = "Programs/Mac/roguec"
+  if (System.run(''$ --target=C++,$ Source/Main.rogue Plasmacore --libraries=Libraries/Rogue --output=$/RogueProgram''...
+      (exe,target,output_folder)))
     System.exit 1
   endIf
 

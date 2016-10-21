@@ -1,6 +1,7 @@
 #AM_CCFLAGS     += -O3
 IMAGE_IO_CCFLAGS += -O3
 
+ROGUEC        = ../../Programs/Mac/roguec --libraries=../../Libraries/Rogue
 ROGUEC_FLAGS += --target="C++,Console"
 ROGUEC_FLAGS += --debug
 
@@ -101,7 +102,7 @@ AM_CCFLAGS += -lbz2
 
 all: update build
 
-build: $(BUILD_FOLDER) $(BUILD_FOLDER)/$(IMAGE_IO_FOLDER) $(HARFBUZZ_BUILD_FOLDER)/libharfbuzz.a assetmanager
+build: $(BUILD_FOLDER) $(BUILD_FOLDER)/$(IMAGE_IO_FOLDER) $(HARFBUZZ_BUILD_FOLDER)/libharfbuzz.a imagecompiler
 
 $(BUILD_FOLDER):
 	mkdir -p $(BUILD_FOLDER)
@@ -121,12 +122,12 @@ clean:
 $(HARFBUZZ_BUILD_FOLDER)/libharfbuzz.a:
 	make -C ../HarfBuzz
 
-assetmanager: $(BUILD_FOLDER)/assetmanager
+imagecompiler: $(BUILD_FOLDER)/imagecompiler
 
-$(BUILD_FOLDER)/assetmanager: AssetManager.rogue $(ROGUE_LIBS) $(IMAGE_IO_OFILES)
-	roguec $(ROGUEC_FLAGS) AssetManager.rogue --main --output=$(BUILD_FOLDER)/AssetManager
-	@echo Compiling AssetManager...
-	@clang++ -Wall $(AM_CCFLAGS) -std=c++11 -fno-strict-aliasing $(BUILD_FOLDER)/AssetManager.cpp $(IMAGE_IO_OFILES) -o $(BUILD_FOLDER)/assetmanager
+$(BUILD_FOLDER)/imagecompiler: ImageCompiler.rogue $(ROGUE_LIBS) $(IMAGE_IO_OFILES)
+	$(ROGUEC) $(ROGUEC_FLAGS) ImageCompiler.rogue --main --output=$(BUILD_FOLDER)/ImageCompiler
+	@echo Compiling ImageCompiler...
+	@clang++ -Wall $(AM_CCFLAGS) -std=c++11 -fno-strict-aliasing $(BUILD_FOLDER)/ImageCompiler.cpp $(IMAGE_IO_OFILES) -o $(BUILD_FOLDER)/imagecompiler
 
 update:
 	@# Run the local makefile if it exists

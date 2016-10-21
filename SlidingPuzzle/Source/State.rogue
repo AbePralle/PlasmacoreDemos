@@ -18,6 +18,7 @@ class ShowSolvedState : PuzzleState
   METHODS
     method on_start
       view.board.picture_opacity.target_value = 1.0
+      view.board.reset
 
     method on( e:PointerEvent )
       if (e.is_press)
@@ -56,7 +57,7 @@ class ShuffleState : PuzzleState
         local top_left_piece = view.board[ XY(0,0) ]
         if (top_left_piece.location.value == top_left_piece.solved_location)
           view.board.make_random_move
-        else
+        elseIf (not view.board.is_animating)
           change_state( PlayState() )
         endIf
       endIf
@@ -77,7 +78,11 @@ class PlayState : PuzzleState
       endIf
 
     method on_update
-      if (view.board.is_solved) change_state( ShowSolvedState() )
+      if (view.board.is_solved)
+        Messages.add( "Puzzle solved!" )
+        Messages.add( "Tap to play again" )
+        change_state( ShowSolvedState() )
+      endIf
 
 endClass
 

@@ -71,6 +71,10 @@ class Board
       previous_random_move = delta
       return true
 
+    method reset
+      pieces.sort( (a,b) => a.solution_index < b.solution_index )
+      forEach (piece in pieces) piece.location.value = piece.solved_location
+
     method swap( a:Piece, b:Piece )
       pieces.swap( a.index, b.index )
       local temp = a.location.value

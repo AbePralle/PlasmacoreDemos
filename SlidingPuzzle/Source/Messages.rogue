@@ -1,0 +1,50 @@
+using Plasmacore
+
+class Messages [singleton]
+  PROPERTIES
+    messages = HUDMessage[]
+
+  METHODS
+    method add( text:String, position=Display.center:XY, initial_delay=0:Int32 )
+      messages.add( HUDMessage(text,position,initial_delay) )
+
+    method draw
+      if (messages.count) messages.first.draw
+
+    method update
+      if (messages.count)
+        messages.first.update
+        if (messages.first.is_finished) messages.remove_first
+      endIf
+endClass
+
+
+class HUDMessage
+  PROPERTIES
+    text        : String
+    position    : XY
+    actions     : ActionCmd
+    opacity     = TargetValue<<Real64>>( 0, &duration=0.5 )
+    is_finished : Logical
+
+  METHODS
+    method init( text, position, initial_delay:Int32 )
+      actions += ActionCmdWait( initial_delay )
+      actions += ActionCmd( function with(opacity) => opacity.target_value = 1 )
+      actions += ActionCmdWait( 1 )
+      actions += ActionCmd( function with(opacity) => opacity.target_value = 0 )
+      actions += ActionCmdWait( 1 )
+
+    method draw
+      local font = MainView.font
+      font.anchor = Anchor.CENTER
+      font.opacity = opacity.value
+      font.color = Color.BLACK
+      font.draw( text, position+4 )
+      font.color = Color.WHITE
+      font.draw( text, position )
+
+    method update
+      if (actions) actions = actions.update
+      else         is_finished = true
+endClass

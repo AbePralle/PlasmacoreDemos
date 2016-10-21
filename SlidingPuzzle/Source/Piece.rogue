@@ -51,4 +51,8 @@ class Piece
 
     method move_left->Logical
       return move( XY(-1,0) )
+
+    method solution_index->Int32
+      return solved_location.y * board.pieces_per_side + solved_location.x
 endClass
+
