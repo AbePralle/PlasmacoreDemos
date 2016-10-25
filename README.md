@@ -1,5 +1,5 @@
 # Sliding Puzzle Demo
-- v1.0.1
+- v1.0.2
 - October 20, 2016
 - Made with the [Plasmacore](https://github.com/AbePralle/Plasmacore) game programming framework
 
