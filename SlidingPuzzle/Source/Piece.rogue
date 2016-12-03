@@ -6,8 +6,8 @@ class Piece
     image           : Image
     piece_size      : Real64
     solved_location : XY
-    location        = TargetValue<<XY>>( XY(0,0), 0.25, ProgressFn.QUADRATIC )
-    opacity         = TargetValue<<Real64>>( 1.0, 0.25, ProgressFn.QUADRATIC )
+    location        = EasedValue<<XY>>( XY(0,0), 0.25, ProgressFn.QUADRATIC )
+    opacity         = EasedValue<<Real64>>( 1.0, 0.25, ProgressFn.QUADRATIC )
     is_empty        : Logical
 
   METHODS

@@ -9,12 +9,6 @@ class Event
       this.is_consumed = true
 endClass
 
-class DrawEvent : Event [singleton]
-endClass
-
-class UpdateEvent : Event [singleton]
-endClass
-
 class KeyEvent : Event
   PROPERTIES
     keycode     : Int32

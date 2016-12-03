@@ -33,6 +33,7 @@ $include "Quaternion.rogue"
 $include "RenderMode.rogue"
 $include "Rotation.rogue"
 $include "Shader.rogue"
+$include "Sound.rogue"
 $include "Sprite.rogue"
 $include "State.rogue"
 $include "SystemFont.rogue"
@@ -48,8 +49,6 @@ module Plasmacore
 
 class Plasmacore [essential singleton]
   PROPERTIES
-    default_asset_folder    = ""
-
     next_resource_id        = 1
     display_view_types      = StringTable<<TypeInfo>>()
     global_update_callback  : Function()
@@ -57,9 +56,9 @@ class Plasmacore [essential singleton]
     launch_window_name      : String
     displays                = StringTable<<Display>>()
 
-    image_manifest          : ValueTable
     #image_group_info_lookup = @{}
-    image_info_lookup       = @{}
+    image_info_lookup       = Table<<String,ImageInfo>>()
+    image_group_info_lookup = Table<<String,ImageGroupInfo>>()
 
     cache_folder : String
     data_folder  : String
@@ -68,7 +67,7 @@ class Plasmacore [essential singleton]
     method init
       Console.println "Initializing Plasmacore"
 
-      load_image_manifest
+      load_image_index
 
       MessageManager.add_listener( "Application.launch",
         function(m:Message)
@@ -82,9 +81,16 @@ class Plasmacore [essential singleton]
         endFunction )
 
         MessageManager.add_listener( "Display.render",
-        function(m:Message)
-          Display( m.string("display_name") ).render( XY(m.int32("display_width"),m.int32("display_height")) )
-        endFunction )
+          function(m:Message)
+            local display_size = XY( m.int32("display_width"),m.int32("display_height") )
+            local viewport_size : XY
+            if (m.contains("viewport_width"))
+              viewport_size = XY( m.int32("viewport_width"),m.int32("viewport_height") )
+            else
+              viewport_size = display_size
+            endIf
+            Display( m.string("display_name") ).render( display_size, viewport_size )
+          endFunction )
 
         MessageManager.add_listener( "Display.on_pointer_event",
           function(m:Message)
@@ -105,10 +111,7 @@ class Plasmacore [essential singleton]
     method asset_filepath( name:String )->String
       if (File.exists(name)) return name   # already correct
 
-      local filepath = native( "Plasmacore_find_asset( $name )" )->String
-      if (filepath) return filepath
-
-      name = "Assets/Images/" + name
+      # may return null
       return native( "Plasmacore_find_asset( $name )" )->String
 
     method cache_folder->String
@@ -136,11 +139,25 @@ class Plasmacore [essential singleton]
       endIf
       return result
 
-      #method find_image_group_info( name:String )->Value
-      #return image_group_info_lookup[ name ]
+    method find_image_info( name:String )->ImageInfo
+      local info : ImageInfo
 
-    method find_image_info( name:String )->Value
-      return image_info_lookup[ name ]
+      # Attempt with search paths first before falling back to base name
+      forEach (search_path at index in Image.search_folders)
+        Image.search_folders[ index ] = File.ensure_ends_with_separator( search_path )
+      endForEach
+
+      forEach (search_path in Image.search_folders)
+        info = image_info_lookup[ search_path + name ]
+        if (info) return info.load
+      endForEach
+
+      info = image_info_lookup[ name ]
+      if (info) return info.load
+
+      println "No such image: " + name
+
+      return null
 
     method global_update
       global_update_timer.update
@@ -148,34 +165,134 @@ class Plasmacore [essential singleton]
         if (global_update_callback) global_update_callback()
       endWhile
 
-    method index_assets
-      image_info_lookup = @{}
-      forEach (group_info in Plasmacore.image_manifest["groups"])
-        forEach (image_info in group_info["images"])
-          local name = image_info["name"]->String
-          image_info_lookup[ name ] = image_info
-          if (name.begins_with(default_asset_folder))
-            image_info_lookup[ name.after_first(default_asset_folder) ] = image_info
-          endIf
-          image_info_lookup[ File.filename(name) ] = image_info
+    method get_image_group_info( filepath:String )->ImageGroupInfo
+      local info = image_group_info_lookup[ filepath ]
+      if (info) return info
+
+      info = ImageGroupInfo( filepath )
+      image_group_info_lookup[ filepath ] = info
+      return info
+
+    method load_image_index
+      local image_index = JSON.load_table( asset_file("Assets/Images/ImageIndex.json") ).decompressed
+
+      image_info_lookup.clear
+      image_group_info_lookup.clear
+
+      # Full filepath
+      forEach (group_info in image_index//groups)
+        local group = get_image_group_info( group_info//filepath->String )
+        forEach (image in group_info//images)
+          local name = image->String
+          image_info_lookup[ name ] = ImageInfo( name, group )
         endForEach
       endForEach
 
-    method load_image_manifest
-      image_manifest = ValueTable.load( asset_file("ImageManifest.json") )
-      index_assets
+      # For A/B/C.png, add B/C.png and C.png as separate entries as long as they
+      # do not conflict with any existing entry.
+      forEach (img in image_info_lookup.values)
+        local name = img.name
+        while (name.contains('/'))
+          name = name.after_first( '/' )
+          if (not image_info_lookup.contains(name)) image_info_lookup[ name ] = img
+        endWhile
+      endForEach
 
     method on_global_update( global_update_callback )
       noAction
 
-    method set_default_asset_folder( folder:String )->this
-      if (not folder) folder = ""
-      if (default_asset_folder == folder) return this
+endClass
 
-      if (folder.count) folder = File.ensure_ends_with_separator( folder )
-      @default_asset_folder = folder
-      index_assets
+class ImageInfo
+  ENUMERATE
+    TYPE_TEXTURE_IMAGE
+    TYPE_IMAGE_LIST
+    TYPE_FONT
+
+  PROPERTIES
+    name             : String
+    group            : ImageGroupInfo
+
+    type             : Int32
+
+    unicode          : Character
+
+    display_size     : XY
+    texture_filename : String
+    texture_bounds   : Box
+
+    images           : ImageInfo[]
+
+  METHODS
+    method init( name, group )
+
+    method init( existing:ImageInfo )
+      name = existing.name
+      group = existing.group
+      type = existing.type
+      unicode = existing.unicode
+      display_size = existing.display_size
+      texture_bounds = existing.texture_bounds
+      texture_filename = existing.texture_filename
+      if (existing.images) images = existing.images.cloned
+
+    method init( info:Value )
+      load( info )
+
+    method cloned->ImageInfo
+      return ImageInfo( this )
+
+    method load->this
+      if (group) group.load
       return this
+
+    method load( info:Value )
+      unicode = Character( info//unicode->Int32 )
+
+      which (info//type)
+        case "TextureImage"
+          type = TYPE_TEXTURE_IMAGE
+          texture_filename = info//texture//filename->String
+          texture_bounds = Box( info//texture//bounds )
+          display_size = XY( info//display_size )
+
+        case "Image[]"
+          type = TYPE_IMAGE_LIST
+          ensure images
+          forEach (img in info//images)
+            images.add( ImageInfo(img) )
+          endForEach
+
+        case "Font"
+          type = TYPE_FONT
+          ensure images
+          forEach (img in info//characters)
+            images.add( ImageInfo(img) )
+          endForEach
+
+      endWhich
+
+endClass
+
+class ImageGroupInfo
+  PROPERTIES
+    filepath  : String
+    is_loaded : Logical
+
+  METHODS
+    method init( filepath )
+
+    method load
+      if (is_loaded) return
+      is_loaded = true
+
+      local manifest = JSON.load_table( Plasmacore.asset_file(filepath) ).decompressed
+      forEach (image in manifest//images)
+        local info = Plasmacore.image_info_lookup[ image//name ]
+        if (not info) nextIteration
+
+        info.load( image )
+      endForEach
 
 endClass
 

@@ -1,22 +1,29 @@
-PLASMACORE_VERSION = v0.2.1
+PLASMACORE_VERSION = v0.5.2
 
 ROGUE_LIBRARIES = $(shell find Libraries/Rogue | grep "\.rogue$$")
 
 ios: override TARGET := iOS
 
-all: build run compile_images
+mac: override TARGET := Mac
 
-ios: build run compile_images
+all: build run compile_images compile_sounds
+
+ios: build run compile_images compile_sounds
+
+mac: build run compile_images compile_sounds
 
 build: Build/BuildScript/buildscript
 
 compile_images:
-	./icom iOS
+	./icom $(TARGET)
+
+compile_sounds:
+	./scom $(TARGET)
 
 Build/BuildScript:
 	mkdir -p Build/BuildScript
 
-Build/BuildScript/buildscript: Build/BuildScript Build.rogue $(ROGUE_LIBRARIES)
+Build/BuildScript/buildscript: Build/BuildScript Build.rogue BuildCore.rogue $(ROGUE_LIBRARIES)
 	Programs/Mac/roguec Build.rogue --libraries=Libraries/Rogue --output=Build/BuildScript/BuildScript --main
 	c++ -std=c++11 -fno-strict-aliasing Build/BuildScript/BuildScript.cpp -o Build/BuildScript/buildscript
 
@@ -33,12 +40,15 @@ clean_harfbuzz:
 clean_icom:
 	make -C Libraries/ImageCompiler clean
 
-xclean: clean clean_harfbuzz clean_icom
+clean_scom:
+	make -C Libraries/SoundCompiler clean
+
+xclean: clean clean_harfbuzz clean_icom clean_scom
 
 update: prepare_update
 
 prepare_update:
-	@[ ! -e Build/Update/Plasmacore ] && echo "Cloning Plasmacore master branch into Build/Update/" && mkdir -p Build/Update && cd Build/Update && git clone git@github.com:AbePralle/Plasmacore.git || true
+	@[ ! -e Build/Update/Plasmacore ] && echo "Cloning Plasmacore master branch into Build/Update/" && mkdir -p Build/Update && cd Build/Update && git clone https://github.com/AbePralle/Plasmacore.git || true
 	@echo "Pulling latest Build/Update/Plasmacore/"
 	@[ -e Build/Update/Plasmacore ] && cd Build/Update/Plasmacore && git pull
 	@rsync -a -c --out-format="Updating %n%L" Build/Update/Plasmacore/Makefile .
@@ -47,7 +57,9 @@ prepare_update:
 continue_update:
 	@rsync -a -c --exclude=".*" --delete --out-format="Updating %n%L" Build/Update/Plasmacore/BuildCore.rogue .
 	@rsync -a -c --exclude=".*" --delete --out-format="Updating %n%L" Build/Update/Plasmacore/icom .
+	@rsync -a -c --exclude=".*" --delete --out-format="Updating %n%L" Build/Update/Plasmacore/scom .
 	@rsync -a -c --exclude=".*" --exclude="Build/*" --delete --out-format="Updating %n%L" Build/Update/Plasmacore/Libraries/ImageCompiler Libraries
+	@rsync -a -c --exclude=".*" --exclude="Build/*" --delete --out-format="Updating %n%L" Build/Update/Plasmacore/Libraries/SoundCompiler Libraries
 	@rsync -a -c --exclude=".*" --exclude="Build/*" --delete --out-format="Updating %n%L" Build/Update/Plasmacore/Libraries/FreeType     Libraries
 	@rsync -a -c --exclude=".*" --exclude="Build/*" --delete --out-format="Updating %n%L" Build/Update/Plasmacore/Libraries/HarfBuzz     Libraries
 	@rsync -a -c --exclude=".*" --delete --out-format="Updating %n%L" Build/Update/Plasmacore/Libraries/ImageIO      Libraries

@@ -24,7 +24,7 @@ class HUDMessage
     text        : String
     position    : XY
     actions     : ActionCmd
-    opacity     = TargetValue<<Real64>>( 0, &duration=0.5 )
+    opacity     = EasedValue<<Real64>>( 0, &duration=0.5 )
     is_finished : Logical
 
   METHODS

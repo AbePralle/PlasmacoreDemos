@@ -67,14 +67,16 @@ endClass
 class PlayState : PuzzleState
   METHODS
     method on( e:PointerEvent )
-      local piece = view.board.find_piece( e.position )
-      if (piece)
-        contingent
-          sufficient (piece.move_up)
-          sufficient (piece.move_right)
-          sufficient (piece.move_down)
-          sufficient (piece.move_left)
-        endContingent
+      if (e.is_press)
+        local piece = view.board.find_piece( e.position )
+        if (piece)
+          contingent
+            sufficient (piece.move_up)
+            sufficient (piece.move_right)
+            sufficient (piece.move_down)
+            sufficient (piece.move_left)
+          endContingent
+        endIf
       endIf
 
     method on_update

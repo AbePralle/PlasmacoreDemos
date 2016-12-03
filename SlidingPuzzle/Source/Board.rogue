@@ -3,7 +3,7 @@ using Plasmacore
 class Board
   PROPERTIES
     picture         : Image
-    picture_opacity = TargetValue<<Real64>>( 1, 0.5, ProgressFn.QUADRATIC )
+    picture_opacity = EasedValue<<Real64>>( 1, 0.5, ProgressFn.QUADRATIC )
     bounds          : Box
 
     pieces_per_side : Int32
