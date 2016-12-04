@@ -1,0 +1,126 @@
+module Plasmacore
+
+class State
+  GLOBAL METHODS
+    method operator+( a:State, b:State )->State
+      if (not a) return b
+      if (not b) return a
+      a.queue_state( b )
+      return a
+
+  PROPERTIES
+    view                  : View
+
+    is_active             : Logical
+    needs_first_update    = true
+    previous_display_size : XY?
+
+    next_state            : State
+    prior_state           : State
+
+  METHODS
+    method init( view=null )
+
+    method after( e:KeyEvent )
+
+    method after( e:PointerEvent )
+
+    method after_draw
+
+    method after_resize
+
+    method after_update
+
+    method change_state( new_state:State )
+      view.change_state( new_state )
+
+    method exit_state
+      view.exit_state
+
+    method handle( e:KeyEvent )
+      on( e )
+      if (e.is_consumed) return
+
+      view.handle( e )
+      if (e.is_consumed) return
+
+      after( e )
+
+    method handle( e:PointerEvent )
+      on( e )
+      if (e.is_consumed) return
+
+      view.handle( e )
+      if (e.is_consumed) return
+
+      after( e )
+
+    method handle_draw
+      on_draw
+      view.handle_draw
+      after_draw
+
+    method handle_resize
+      on_resize
+
+      local cur_view = view
+      if (not cur_view.previous_display_size.exists or cur_view.previous_display_size.value != Display.size)
+        cur_view.handle_resize
+        cur_view.previous_display_size = Display.size
+      endIf
+
+      after_resize
+
+    method handle_update
+      on_update
+
+      view.needs_first_update = false
+      view.handle_update
+
+      after_update
+
+    method load_another_asset->Real64
+      return view.load_another_asset
+
+    method load_assets
+      view.load_assets
+
+    method on( e:KeyEvent )
+
+    method on( e:PointerEvent )
+
+    method on_draw
+
+    method on_finish
+
+    method on_prepare
+
+    method on_resize
+
+    method on_resume
+
+    method on_start
+
+    method on_suspend
+
+    method on_update
+
+    method push_state( new_state:State )
+      view.push_state( new_state )
+
+    method queue_state( new_state:State )
+      if (not view) view = Display.view
+      if (not new_state.view) new_state.view = view
+      view.queue_state( new_state )
+
+    method set_view( @view )->this
+      return this
+
+endClass
+
+class State<<$ViewType>> : State
+  METHODS
+    method view->$ViewType
+      return @view as $ViewType
+endClass
+

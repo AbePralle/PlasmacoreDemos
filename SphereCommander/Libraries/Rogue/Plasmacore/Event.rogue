@@ -1,0 +1,124 @@
+module Plasmacore
+
+class Event
+  PROPERTIES
+    is_consumed = false
+
+  METHODS
+    method consume
+      this.is_consumed = true
+endClass
+
+class KeyEvent : Event
+  PROPERTIES
+    keycode     : Int32
+    unicode     : Character
+    syscode     : Int32
+    is_press    : Logical
+    is_repeat   : Logical
+
+  METHODS
+    method init( keycode, unicode, syscode, is_press=false, is_repeat=false )
+
+    method character->Character [macro]
+      this.unicode->Character
+
+    method is_character( ch:Character )->Logical [macro]
+      (this.unicode == ch)
+
+    method is_press( ch:Character )->Logical
+      return unicode == ch and is_press
+
+    method is_repeat( ch:Character )->Logical
+      return unicode == ch and is_repeat
+
+    method is_release->Logical [macro]
+      not this.is_press
+
+    method is_release( ch:Character )->Logical
+      return unicode == ch and not is_press
+
+    method to->String
+      local buffer = StringBuilder()
+       which (unicode)
+         case    1: buffer.print( "[LeftArrow] " )
+         case    2: buffer.print( "[UpArrow] " )
+         case    3: buffer.print( "[RightArrow] " )
+         case    4: buffer.print( "[DownArrow] " )
+         case    8: buffer.print( "[Backspace] " )
+         case '\t': buffer.print( "[Tab] " )
+         case '\n': buffer.print( "[Enter] " )
+         case   27: buffer.print( "[Escape] " )
+         case   32: buffer.print( "[Space] " )
+         case  127: buffer.print( "[Delete] " )
+         others
+           if (unicode >= 32 and unicode != 127)
+             buffer.print( "'" ).print( unicode ).print( "' " )
+           endIf
+           if (unicode < 32 or unicode == 127) buffer.print( "(Unicode " ).print( Int32(unicode) ).print( ") " )
+       endWhich
+
+       if (is_press)
+         if (is_repeat) buffer.print( "pressed (repeating)" )
+         else           buffer.print( "pressed" )
+       else
+         buffer.print( "released" )
+       endIf
+
+        if (is_consumed) buffer.print( " (consumed)" )
+
+       return buffer->String
+
+endClass
+
+
+class PointerEvent : Event
+  ENUMERATE
+    MOVE     = 0
+    PRESS    = 1
+    RELEASE  = 2
+    SCROLL   = 3
+
+  PROPERTIES
+    type        : Int32
+    position    : XY
+    delta       : XY
+    index       : Int32
+    id          : Int32
+
+  METHODS
+    method init( type, position, delta, index, id )
+
+    method is_move->Logical [macro]
+      (this.type == PointerEvent.MOVE)
+
+    method is_press->Logical [macro]
+      (this.type == PointerEvent.PRESS)
+
+    method is_press( button_index:Int32 )->Logical
+      return (this.type == PRESS and index == button_index)
+
+    method is_release->Logical [macro]
+      (this.type == PointerEvent.RELEASE)
+
+    method is_release( button_index:Int32 )->Logical
+      return (this.type == RELEASE and index == button_index)
+
+    method is_scroll->Logical [macro]
+      (this.type == PointerEvent.SCROLL)
+
+    method to->String
+      local buffer = StringBuilder()
+      buffer.print( "Pointer " )
+      which (type)
+        case MOVE:     buffer.print( "move" )
+        case PRESS:    buffer.print( "press index " ).print( index )
+        case RELEASE:  buffer.print( "release" )
+        case SCROLL:   buffer.print( "scroll " ).print( delta )
+      endWhich
+      buffer.print( " at " ).print( position )
+      if (is_consumed) buffer.print( " (consumed)" )
+
+      return buffer->String
+endClass
+

@@ -1,0 +1,292 @@
+#==============================================================================
+# Plasmacore.rogue
+#==============================================================================
+
+$include "Anchor.rogue"
+$include "Bitmap.rogue"
+$include "Box.rogue"
+$include "Color.rogue"
+$include "JPEG.rogue"
+$include "PNG.rogue"
+$include "System.rogue"
+$include "XY.rogue"
+
+$if not "Console"
+
+$include "ActionCmd.rogue"
+$include "Assets.rogue"
+$include "Corners.rogue"
+$include "Display.rogue"
+$include "Event.rogue"
+$include "Font.rogue"
+$include "UI"
+$include "Image.rogue"
+$include "ImageList.rogue"
+$include "ImageSheetBuilder.rogue"
+$include "Keyboard.rogue"
+$include "Matrix.rogue"
+$include "Messaging.rogue"
+$include "Log.rogue"
+$include "OverlayLog.rogue"
+$include "ProgressFn.rogue"
+$include "ProjectionMode.rogue"
+$include "Quaternion.rogue"
+$include "RenderMode.rogue"
+$include "Rotation.rogue"
+$include "Shader.rogue"
+$include "Sound.rogue"
+$include "Sprite.rogue"
+$include "State.rogue"
+$include "SystemFont.rogue"
+$include "TargetValue.rogue"
+$include "Texture.rogue"
+$include "UpdateTimer.rogue"
+$include "View.rogue"
+$include "Window.rogue"
+$include "XYZ.rogue"
+$include "XYZW.rogue"
+
+module Plasmacore
+
+class Plasmacore [essential singleton]
+  PROPERTIES
+    next_resource_id        = 1
+    display_view_types      = StringTable<<TypeInfo>>()
+    global_update_callback  : Function()
+    global_update_timer     = UpdateTimer()
+    displays                = StringTable<<Display>>()
+
+    #image_group_info_lookup = @{}
+    image_info_lookup       = Table<<String,ImageInfo>>()
+    image_group_info_lookup = Table<<String,ImageGroupInfo>>()
+
+    cache_folder : String
+    data_folder  : String
+
+  METHODS
+    method init
+      Console.println "Initializing Plasmacore"
+
+      load_image_index
+
+      MessageManager.add_listener( "Display.render",
+        function(m:Message)
+          local display_size = XY( m.int32("display_width"),m.int32("display_height") )
+          local viewport_size : XY
+          if (m.contains("viewport_width"))
+            viewport_size = XY( m.int32("viewport_width"),m.int32("viewport_height") )
+          else
+            viewport_size = display_size
+          endIf
+          Display( m.string("display_name") ).render( display_size, viewport_size )
+        endFunction )
+
+      MessageManager.add_listener( "Display.on_pointer_event",
+        function(m:Message)
+          local display = Display( m.string("display_name") )
+          local scale = display.display_scale
+          local pos   = XY( m.int32("x"), m.int32("y") ) * scale
+          local delta = XY( m.real64("dx"), m.real64("dy") ) * scale
+          local e = PointerEvent( m.int32("type"), pos, delta,
+            m.int32("index"), m.int32("id") )
+          display.handle( e )
+        endFunction )
+
+    method asset_file( name:String )->File
+      local filepath = asset_filepath( name )
+      if (not filepath) return null
+      return File( filepath )
+
+    method asset_filepath( name:String )->String
+      if (File.exists(name)) return name   # already correct
+
+      # may return null
+      return native( "Plasmacore_find_asset( $name )" )->String
+
+    method cache_folder->String
+      if (not @cache_folder)
+        cache_folder = native( "Plasmacore_get_library_folder()" )->String + "/Caches"
+      endIf
+      return @cache_folder
+
+    method create_resource_id->Int32
+      ++next_resource_id
+      return (next_resource_id - 1)
+
+    method data_folder->String
+      if (not @data_folder)
+        data_folder = native( "Plasmacore_get_documents_folder()" )->String
+      endIf
+      return @data_folder
+
+    method display( name:String )->Display
+      local result = displays[ name ]
+      if (not result)
+        result = Display()
+        result.name = name
+        Plasmacore.displays[ name ] = result
+      endIf
+      return result
+
+    method find_image_info( name:String )->ImageInfo
+      local info : ImageInfo
+
+      # Attempt with search paths first before falling back to base name
+      forEach (search_path at index in Image.search_folders)
+        Image.search_folders[ index ] = File.ensure_ends_with_separator( search_path )
+      endForEach
+
+      forEach (search_path in Image.search_folders)
+        info = image_info_lookup[ search_path + name ]
+        if (info) return info.load
+      endForEach
+
+      info = image_info_lookup[ name ]
+      if (info) return info.load
+
+      println "No such image: " + name
+
+      return null
+
+    method global_update
+      global_update_timer.update
+      while (global_update_timer.tick)
+        if (global_update_callback) global_update_callback()
+      endWhile
+
+    method get_image_group_info( filepath:String )->ImageGroupInfo
+      local info = image_group_info_lookup[ filepath ]
+      if (info) return info
+
+      info = ImageGroupInfo( filepath )
+      image_group_info_lookup[ filepath ] = info
+      return info
+
+    method load_image_index
+      local image_index = JSON.load_table( asset_file("Assets/Images/ImageIndex.json") ).decompressed
+
+      image_info_lookup.clear
+      image_group_info_lookup.clear
+
+      # Full filepath
+      forEach (group_info in image_index//groups)
+        local group = get_image_group_info( group_info//filepath->String )
+        forEach (image in group_info//images)
+          local name = image->String
+          image_info_lookup[ name ] = ImageInfo( name, group )
+        endForEach
+      endForEach
+
+      # For A/B/C.png, add B/C.png and C.png as separate entries as long as they
+      # do not conflict with any existing entry.
+      forEach (img in image_info_lookup.values)
+        local name = img.name
+        while (name.contains('/'))
+          name = name.after_first( '/' )
+          if (not image_info_lookup.contains(name)) image_info_lookup[ name ] = img
+        endWhile
+      endForEach
+
+    method on_global_update( global_update_callback )
+      noAction
+
+endClass
+
+class ImageInfo
+  ENUMERATE
+    TYPE_TEXTURE_IMAGE
+    TYPE_IMAGE_LIST
+    TYPE_FONT
+
+  PROPERTIES
+    name             : String
+    group            : ImageGroupInfo
+
+    type             : Int32
+
+    unicode          : Character
+
+    display_size     : XY
+    texture_filename : String
+    texture_bounds   : Box
+
+    images           : ImageInfo[]
+
+  METHODS
+    method init( name, group )
+
+    method init( existing:ImageInfo )
+      name = existing.name
+      group = existing.group
+      type = existing.type
+      unicode = existing.unicode
+      display_size = existing.display_size
+      texture_bounds = existing.texture_bounds
+      texture_filename = existing.texture_filename
+      if (existing.images) images = existing.images.cloned
+
+    method init( info:Value )
+      load( info )
+
+    method cloned->ImageInfo
+      return ImageInfo( this )
+
+    method load->this
+      if (group) group.load
+      return this
+
+    method load( info:Value )
+      unicode = Character( info//unicode->Int32 )
+
+      which (info//type)
+        case "TextureImage"
+          type = TYPE_TEXTURE_IMAGE
+          texture_filename = info//texture//filename->String
+          texture_bounds = Box( info//texture//bounds )
+          display_size = XY( info//display_size )
+
+        case "Image[]"
+          type = TYPE_IMAGE_LIST
+          ensure images
+          forEach (img in info//images)
+            images.add( ImageInfo(img) )
+          endForEach
+
+        case "Font"
+          type = TYPE_FONT
+          ensure images
+          forEach (img in info//characters)
+            images.add( ImageInfo(img) )
+          endForEach
+
+      endWhich
+
+endClass
+
+class ImageGroupInfo
+  PROPERTIES
+    filepath  : String
+    is_loaded : Logical
+
+  METHODS
+    method init( filepath )
+
+    method load
+      if (is_loaded) return
+      is_loaded = true
+
+      local manifest = JSON.load_table( Plasmacore.asset_file(filepath) ).decompressed
+      forEach (image in manifest//images)
+        local info = Plasmacore.image_info_lookup[ image//name ]
+        if (not info) nextIteration
+
+        info.load( image )
+      endForEach
+
+endClass
+
+nativeCode extern "C" RogueString* Plasmacore_find_asset( RogueString* name );
+nativeCode extern "C" RogueString* Plasmacore_get_documents_folder();
+nativeCode extern "C" RogueString* Plasmacore_get_library_folder();
+
+$endIf  # not Console

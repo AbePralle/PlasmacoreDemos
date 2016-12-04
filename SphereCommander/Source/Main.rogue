@@ -1,0 +1,435 @@
+#==============================================================================
+# Sphere Commander
+#
+# By Murphy McCauley
+#
+# HISTORY
+#
+#   2006.09.05 - Created in Java Plasmacore [Murphy McCauley]
+#   2008.02.03 - Adapted to Slag Plasmacore [Abe Pralle]
+#   2016.12.04 - Adapted to Rogue Plasmacore [Abe Pralle]
+#==============================================================================
+using Plasmacore
+
+Display( "Main" ).view = GameView
+
+class GameView : View [singleton]
+  PROPERTIES
+    city_image  = Image( "city.png" )
+    title_image = Image( "title.png" )
+    cursor      = Image( "cursor.png" )
+    ball        = Image( "ball26.png" )
+
+    sound_no_missiles = SoundGroup( "no_missiles", 3 )
+    sound_defend      = SoundGroup( "defend", 3 )
+    sound_enemy_explode = SoundGroup( "implosion2", 3 )
+    sound_destroyed_city = SoundGroup( "destroyed_city", 3 )
+    sound_game_over = Sound( "gameover" )
+
+    sky_grad, ground_grad : Colors
+
+    tick_count       : Int32
+    pointer_position : XY?
+
+    info_message         : String
+    info_message_timeout : Int32
+
+  METHODS
+    method on_start
+      sky_grad = Colors( 0xFFCCC0FF, 0xFFCCC0FF, 0xFF3000FF, 0xFF3000FF )
+      ground_grad = Colors( 0xFF4F320F, 0xFF4F320F, 0xFF0CA110, 0xFF0CA110 )
+
+      Game = Game()
+      change_state( TitleState() )
+
+    method on( e:PointerEvent )
+      pointer_position = e.position
+
+    method on_draw
+      Display.scale_to_fit( 800, 600 )
+
+      # Draw ground and sky gradients
+      Box(Display.width,sky_height).fill( sky_grad )
+      Box(0,sky_height-1,Display.width,Display.height-(sky_height-1)).fill( ground_grad )
+
+      # Draw cities
+      forEach (c in Game.cities)
+        if (not c.is_destroyed)
+          city_image.draw(c.pos * Display.size)
+        endIf
+      endForEach
+
+      # Draw enemy missiles
+      forEach (m in Game.enemy_missiles)
+        local mb = m.start_pos
+        local normal = (m.pos - mb).normal.normalized * 0.007
+        local mp1 = m.pos - normal
+        local mp2 = m.pos + normal
+
+        mb = (mb - m.pos).normalized * (.2) + m.pos
+
+        local color1 = Color( 0xFFFFC6C8 )
+        local color2 = Color( 0x00FFFFFF )
+
+        mp1 *= Display.size
+        mp2 *= Display.size
+        mb  *= Display.size
+
+        local corners = Corners<<XY>>( mp1, mp2, mb, mb )
+        local colors = Colors( color1, color1, color2, color2 )
+
+        Display.fill_solid_quad( Display.transform(corners), colors, RenderMode.ALPHA_SHAPE, null )
+      endForEach
+
+      forEach (m in Game.enemy_missiles)
+        ball.color = Color( 0xFFFFC6C8 )
+        ball.scale = 1.0 / ball.@size.x * 12
+        ball.draw( m.pos * Display.size )
+      endForEach
+
+      ball.scale = 1.0
+      forEach (m in Game.my_missiles)
+        ball.color = Color( 0xFFA0A0FF )
+        ball.draw( m.pos * Display.size )
+      endForEach
+
+      forEach (d in Game.defenders)
+        ball.color = Color( 0xFFA0A0FF )
+        ball.scale = d.get_radius * Display.width / ball.@size.x
+        ball.draw( d.pos * Display.size )
+      endForEach
+
+      forEach (i in 0 ..< Game.ammo)
+        ball.color = Color( 0xFFA0A0FF )
+        ball.scale = 1.0
+        ball.draw( XY(Int32(20 + i * ball.size.x * .5), Display.height - ball.size.y / 2 - 3) )
+      endForEach
+
+      forEach (d in Game.explosions)
+        ball.color = Color( 0xFFFFA0A0 )
+        ball.scale = d.get_radius * Display.width / ball.@size.y
+        ball.draw( d.pos * Display.size )
+      endForEach
+
+      if ((pointer_position? and pointer_position.value.y > sky_height) or Game.ammo <= 0)
+        cursor.color = Color(0xD0FF2000)
+      else
+        cursor.color = Color.WHITE
+      endIf
+
+      if (pointer_position?) cursor.draw( pointer_position.value )
+
+      if (info_message)
+        if (tick_count < info_message_timeout)
+          if (tick_count % 50 > 20)
+            SystemFont.anchor = Anchor.CENTER
+            SystemFont.draw( info_message, XY(Display.width / 2, (Display.height / 2.5) - 10))
+          endIf
+        else
+          info_message = null
+        endIf
+      endIf
+
+    method on_update
+      ++tick_count
+
+    method set_info_message( @info_message, seconds:Real64 )
+      if (seconds == 0)
+        info_message_timeout = 0x7FFFFFFF
+      else
+        info_message_timeout = tick_count + Int32(seconds * 60.0)
+      endIf
+
+    method set_info_message( msg:String ):
+      set_info_message( msg, 2.5 )
+
+    method sky_height->Int32
+      return Int32(Display.height * 0.8)
+endClass
+
+
+class TitleState : State<<GameView>>
+  METHODS
+    method after_draw
+      local scale = (Display.width / 800.0).or_larger( 1 )
+      view.title_image.scale = scale
+      view.title_image.color = Color(0xFFE090FF)
+      view.title_image.draw( Display.at(0.5,0.25) )
+
+      local cur = view.tick_count % 700
+      local str = ""
+      if (cur > 500) str = "SAVE THE WORLD!"
+      elseIf (cur > 300) str = "DESTROY ENEMY MISSILES!"
+      else str = select{ System.is_desktop:"CLICK TO BEGIN!" || "TAP TO BEGIN!" }
+
+      if (view.tick_count % 50 > 20)
+        SystemFont.anchor = Anchor.CENTER
+        SystemFont.draw( str, XY(Display.width / 2, Int32(Display.height / 2.5) + 12) )
+      endIf
+
+    method on( e:PointerEvent )
+      if (e.is_press)
+        Game = Game()
+        Game.level = 0
+        change_state( PlayState() )
+      endIf
+
+    method on_update
+      Game.update
+endClass
+
+
+class PlayState : State<<GameView>>
+  METHODS
+    method on( e:PointerEvent )
+      if (e.is_press) Game.fire( e.position )
+
+    method on_update
+      if (Game.city_count == 0)
+        GameView.set_info_message("GAME OVER!", 5)
+        GameView.sound_game_over.play
+        change_state( TitleState() )
+
+      else
+        if (Game.remaining_enemy_missles)
+          if (Random.next_real64 * 100 <= (Game.level * .2 + 1) )
+            --Game.remaining_enemy_missles
+            Game.enemy_missiles.add(
+            BadMissile( XY(Random.next_real64,-.01),
+                XY(Random.next_real64, GameView.sky_height / Real64(Display.height + Random.next_real64 * .05) )
+              )
+            )
+          endIf
+        else
+          # No enemies left...
+          if (Game.explosions.count + Game.defenders.count + Game.enemy_missiles.count + Game.my_missiles.count == 0)
+            if (Game.city_count > 0) ++Game.level
+          endIf
+        endIf
+
+        Game.update
+      endIf
+endClass
+
+
+class Game [singleton]
+  PROPERTIES
+    cities      = City[]
+
+    my_missiles = Missile[]
+    enemy_missiles    = Missile[]
+
+    defenders   = Explosion[]
+    explosions  = Explosion[]
+
+    cities_at_start_of_level : Int32
+    remaining_enemy_missles  : Int32
+    ammo       : Int32
+    level      : Int32
+
+  METHODS
+    method init
+      create_cities( 5 )
+      cities_at_start_of_level = cities.count
+      level = 0
+
+    method add_defender( d:Explosion )
+      defenders.add( d )
+      GameView.sound_defend.play
+
+    method city_count->Int32
+      local count = 0
+      if (not ((forEach in cities).is_destroyed)) ++count
+      return count
+
+    method create_cities( num:Int32 )
+      local left = 0.1
+      local w = 1.0 - 2 * left
+      local cw = w / (num - 1)
+
+      forEach (i in 0..< num)
+        cities.add( City(XY( left + i * cw, GameView.sky_height / Real64(Display.height))) )
+      endForEach
+
+    method fire( position:XY )
+      if (position.y < GameView.sky_height and ammo > 0)
+        local pos = position / Display.size
+        my_missiles.add ( MyMissile(XY(.5,1.0),pos) )
+        ammo--
+      else
+        GameView.sound_no_missiles.play
+      endIf
+
+    method on_enemy_impact( pos:XY )
+      explosions.add ( Explosion(pos) )
+      GameView.sound_enemy_explode.play
+
+      forEach (c in cities)
+        if (c.is_destroyed) nextIteration
+
+        if (c.check_collision(pos))
+          c.is_destroyed = true
+          loop (4) explosions.add( Explosion ( c.pos+random_xy(-0.06,0.06), Random.next_int32(30,160) ) )
+          GameView.sound_destroyed_city.play
+        endIf
+      endForEach
+
+    method random_xy( min:Real64, max:Real64 )->XY
+      local x = Random.next_real64( min, max )
+      local y = Random.next_real64( min, max )
+      return XY( x, y )
+
+    method set_level( @level ):
+      local msg = "WAVE $!" (level+1)
+
+      remaining_enemy_missles = Int32( (level * 1.2) * 5 ) + 10
+      if (level)
+        if (city_count == cities_at_start_of_level)
+          ammo += Int32( (ammo * .5) + (level * 4) * (city_count / cities.count) )
+        else
+          ammo += Int32(level * 3)
+        endIf
+      else
+        ammo = 30
+      endIf
+
+      if (city_count == cities_at_start_of_level)
+        if ( (city_count < cities.count) and (ammo > 50) )
+          msg = "BONUS CITY!  GET READY FOR " + msg
+          loop
+            local city = cities.random
+            if (city.is_destroyed)
+              city.is_destroyed = false
+              escapeLoop
+            endIf
+          endLoop
+        else
+          msg = "NICE JOB -- TRY " + msg
+        endIf
+      endIf
+
+      if (level > 0) GameView.set_info_message( msg )
+
+      cities_at_start_of_level = city_count
+
+    method update
+
+      (forEach in my_missiles).update
+
+      forEach (m in enemy_missiles)
+        m.update()
+        if (not m.is_finished)
+          forEach (d in defenders)
+            if (m.pos.distance_to(d.pos) < d.get_radius / 2.2)
+              # Intercepted!
+              m.is_finished = true
+              add_defender( Explosion(m.pos,60 * 2) )
+              escapeForEach
+            endIf
+          endForEach
+        endIf
+      endForEach
+
+      my_missiles.discard( .is_finished )
+      enemy_missiles.discard( .is_finished )
+      defenders.discard( .is_finished )
+      explosions.discard( .is_finished )
+
+endClass
+
+
+class City
+  PROPERTIES
+    pos          : XY
+    is_destroyed : Logical
+
+  METHODS
+    method init( pos )
+
+    method check_collision( other:XY )->Logical
+      return (pos.distance_to(other) < 0.05)
+
+endClass
+
+class Missile
+  PROPERTIES
+    pos                  : XY
+    start_pos, end_pos   : XY
+    delta                : XY
+    end_tick, start_tick : Int32
+    is_finished          : Logical
+
+  METHODS
+    method init( start_pos, end_pos, end_tick )
+      start_tick = GameView.tick_count
+      pos = start_pos
+      delta = (end_pos - start_pos) / (end_tick - start_tick)
+
+    method init( start_pos, end_pos, unit_per_second:Real64 )
+      init( start_pos, end_pos,
+        GameView.tick_count + Int32(60 * (start_pos.distance_to(end_pos) / unit_per_second)))
+
+    method on_destination_reached
+      noAction
+
+    method update
+      if (is_finished) return
+
+      pos += delta
+
+      if (end_tick <= GameView.tick_count)
+        is_finished = true
+        on_destination_reached
+      endIf
+
+    method get_percent->Real64
+      return (GameView.tick_count - start_tick) / Real64(end_tick - start_tick)
+
+endClass
+
+
+class MyMissile : Missile
+  METHODS
+    method on_destination_reached
+      Game.add_defender( Explosion(end_pos, 60 * 3) )
+
+    method init( _start_pos:XY, _end_pos:XY )
+      prior.init( _start_pos, _end_pos, .8 )
+endClass
+
+
+class BadMissile : Missile
+  METHODS
+    method init( _start_pos:XY, _end_pos:XY )
+      init( _start_pos, _end_pos, .08 )
+
+    method on_destination_reached
+      Game.on_enemy_impact( end_pos )
+endClass
+
+
+class Explosion
+  # A defending explosion
+  DEFINITIONS
+    MIN_RADIUS = 10 / 640.0
+    MAX_RADIUS = 60 / 640.0
+
+  PROPERTIES
+    start_tick : Int32
+    pos        : XY
+    lifetime   : Int32
+
+  METHODS
+    method init( pos, lifetime=60 )
+      start_tick = GameView.tick_count
+
+    method get_radius->Real64:
+      if (is_finished) return 0.0
+      local size = Math.sin( pi * ((GameView.tick_count - start_tick)/Real64(lifetime)) )
+      return size * (MAX_RADIUS - MIN_RADIUS) + MIN_RADIUS
+
+    method is_finished->Logical
+      return GameView.tick_count >= (start_tick + lifetime)
+
+endClass
+

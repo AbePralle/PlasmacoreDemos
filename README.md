@@ -1,12 +1,13 @@
 # Plasmacore Demos
-- December 2, 2016
+- December 4, 2016
 - Made with the [Plasmacore](https://github.com/AbePralle/Plasmacore) game programming framework
 
 ## Demos
 
-Demo           | Description
----------------|--------------------
-Sliding Puzzle | Classic 4x4 sliding tile puzzle.
+Demo            | Description
+----------------|--------------------
+Sliding Puzzle  | Classic 4x4 sliding tile puzzle
+SphereCommander | Missile Command-style game
 
 ## Requirements
 - Mac with Xcode.

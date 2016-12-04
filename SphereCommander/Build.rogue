@@ -1,0 +1,3 @@
+$include "BuildCore.rogue"
+
+standard_build( get_platform )

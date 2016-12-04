@@ -1,0 +1,734 @@
+module Plasmacore
+
+class Font
+  PROPERTIES
+    name           : String
+    image_info     : ImageInfo
+
+    data           : FontData
+    options        : @{}
+    snap           : Logical
+
+    anchor         = Anchor.TOP_LEFT : Anchor
+    scale          = XY(1,1)
+    spacing        = 0  # Added to each character's 'advance' (usually the width) to position the next character
+
+    color          = Color.WHITE : Color
+    opacity        = 1.0
+    shader         : Shader  # leave null for default
+
+  METHODS
+    method init( name, options=@{} )
+      data = FontData( name )
+
+    method collect_texture_names( texture_names:StringTable<<Logical>> )
+      data.collect_texture_names( texture_names )
+
+    method load
+      data.load
+
+    method draw( text:String, position:XY )
+      data.draw( this, text, position )
+
+    method draw( text:String, box:Box )
+      draw( text, box.at(anchor) )
+
+    method exists->Logical
+      return data.exists
+
+    method get( ch:Character )->FontCharacter
+      return data[ ch ]
+
+    method height->Real64
+      return data.height * scale.y
+
+    method set_options( @options )->this
+      if (options.contains("anchor")) anchor = Anchor( options//anchor )
+      snap = options//snap->Logical
+      spacing = options//spacing->Int32
+      if (options//snug->Logical) spacing = -1
+      if (options.contains("scale")) scale = XY( options//scale )
+
+      return this
+
+    method measure( text:String, i1=null:Int32?, i2=null:Int32? )->XY
+      return data.measure( text ) * scale
+
+    method measure( text:StringBuilder, i1=null:Int32?, i2=null:Int32? )->XY
+      return data.measure( text ) * scale
+
+    method measure( ch:Character )->XY
+      return data.measure( ch ) * scale
+
+    method set_scale( s:Real64 )->this
+      @scale = XY( s, s )
+      return this
+
+    method set_scale( @scale )->this
+      return this
+
+    method word_wrap( st:String, pixel_width:Int32 )->String[]
+     # Returns a word-wrapped version of the given string as a list of lines.
+      # Existing newlines characters will cause a new line to begin
+      # immediately. Spaces immediately following existing newline characters
+      # are preserved.
+      return word_wrap( st, pixel_width, StringBuilder() )->String.split('\n')
+
+    method word_wrap( st:String, pixel_width:Int32, buffer:StringBuilder )->StringBuilder
+      # Prints a word-wrapped version of the given string into the specified
+      # StringBuilder. Existing newlines characters will cause a new line to
+      # begin immediately. Spaces immediately following existing newline
+      # characters are preserved.
+      local i1, i2 : Int32
+      local len = st.count
+      local w = 0.0
+
+      if (st == "" or pixel_width <= 0) return buffer
+
+      local needs_newline = false
+      local starting_i2 = i2
+      while (i2 < len)
+        starting_i2 = i2
+
+        # find last space or first \n
+        while (w <= pixel_width and i2 < len and st[i2] != '\n')
+          local char_w = measure( st, i2, i2 ).x
+          w += char_w
+          i2++
+        endWhile
+
+        local initial_i2 = i2
+
+        if (w > pixel_width)
+          --i2
+          while (st[i2]!=' ' and st[i2]!='\n' and i2>i1) i2--
+          if (i2 == i1) i2 = initial_i2 - 1
+        endIf
+
+        if (needs_newline) buffer.println
+        forEach (i in i1..<i2) buffer.print( st[i] )
+        needs_newline = true
+        w = 0
+
+        if (i2 == len)
+          return buffer
+        else
+          which (st[i2])
+            case ' ':
+              while (i2<len and st[i2]==' ') i2++
+              if (i2<len and st[i2]=='\n') i2++
+
+            case '\n':
+              i2++
+          endWhich
+          i1 = i2
+        endIf
+
+        if (starting_i2 == i2) return buffer  # Kludge/error
+
+      endWhile
+
+      return buffer
+
+    method unload
+      data.unload
+
+
+endClass
+
+class FontLoaders [singleton]
+  PROPERTIES
+    loaders = StringTable<<Function(String)->(FontData)>>()
+
+  METHODS
+    method init
+      this[ "SystemFont" ] = (function(name) => SystemFontData())
+
+    method get( name:String )->Function(String)->(FontData)
+      return loaders[ name ]
+
+    method set( name:String, loader:Function(String)->(FontData) )->this
+      loaders[ name ] = loader
+      return this
+endClass
+
+class FontData
+  PROPERTIES
+    name             : String
+    image_info       : ImageInfo
+    exists           : Logical
+    is_loaded        : Logical
+    height           : Int32
+    characters       = FontCharacter[]( 128, null )  # first 128 are in correct slots, additional in any order
+    character_lookup = Table<<Character,FontCharacter>>()
+
+  GLOBAL METHODS
+    method create( name:String )->FontData
+      local entry = Display.font_data_by_name.find( name )
+      if (entry) return entry.value
+
+      local loader = FontLoaders[ name ]
+      local font_data = select{ loader:loader(name) || FontData(name, Plasmacore.find_image_info(name)) }
+      Display.font_data_by_name[ name ] = font_data
+
+      return font_data
+
+  METHODS
+    method init( name, image_info )
+      if (image_info)
+        require (image_info.type == ImageInfo.TYPE_FONT)
+        forEach (character_info in image_info.images)
+          local ch = FontCharacter( character_info.unicode, Image(character_info) )
+          height = height.or_larger( ch.image.size.y )
+          require (ch.unicode >= 0)
+          if (ch.unicode < 128)
+            characters[ ch.unicode ] = ch
+          else
+            characters.add( ch )
+          endIf
+          character_lookup[ ch.unicode ] = ch
+        endForEach
+        exists = true
+      endIf
+
+    method collect_texture_names( texture_names:StringTable<<Logical>> )
+      forEach (ch in characters)
+        if (ch) ch.image.collect_texture_names( texture_names )
+      endForEach
+
+    method draw( font:Font, text:String, position:XY  )
+      load
+
+      position = position - Box(measure(text)*font.scale).at( font.anchor ).yv
+
+      if (text.contains('\n'))
+        local h = height * font.scale.y
+        forEach (line in text.split('\n'))
+          draw_line( font, line, position )
+          position += XY(0,h)
+        endForEach
+      else
+        draw_line( font, text, position )
+      endIf
+
+    method draw_line( font:Font, text:String, position:XY  )
+      local cursor = position - Box(measure(text)*font.scale).at( font.anchor ).xv
+      if (font.snap) cursor = cursor.floor
+      forEach (ch in text)
+        local font_ch = this[ ch ]
+        if (font_ch)
+          local image = font_ch.image
+          image.size = font_ch.size * font.scale
+          image.color = font.color
+          image.shader = font.shader  # if null, default is used
+          image.position = cursor + font_ch.offset
+          image.opacity = font.opacity
+          image.draw
+          cursor += font_ch.advance * font.scale + XY(font.spacing,0) * font.scale
+        endIf
+      endForEach
+
+    method get( unicode:Character )->FontCharacter
+      if (unicode >= 0 and unicode <= 127) return characters[ unicode ]
+      return character_lookup[ unicode ]
+
+    method load
+      if (is_loaded) return
+
+      is_loaded = true
+      forEach (ch in characters)
+        if (ch)
+          ch.image.load
+          ch.image.anchor = Anchor.TOP_LEFT
+        endIf
+      endForEach
+
+    method measure( text:String, i1=null:Int32?, i2=null:Int32? )->XY
+      local max_w = 0.0
+      local w = 0.0
+      local h = height : Real64
+      local max_i2 = text.count - 1
+      if (i1) i1 = i1.value.clamped(0,max_i2)
+      if (i2) i2 = i2.value.clamped(0,max_i2)
+
+      forEach (index in select{i1||0}..select{i2||max_i2})
+        local ch = text[index]
+        if (ch == '\n')
+          h += height
+          max_w = max_w.or_larger( w )
+          w = 0.0
+        else
+          local info = this[ ch ]
+          if (info) w += info.advance.x
+        endIf
+      endForEach
+
+      max_w = max_w.or_larger( w )
+      return XY( max_w, h )
+
+    method measure( text:StringBuilder, i1=null:Int32?, i2=null:Int32? )->XY
+      local max_w = 0.0
+      local w = 0.0
+      local h = height : Real64
+      local max_i2 = text.count - 1
+      if (i1) i1 = i1.value.clamped(0,max_i2)
+      if (i2) i2 = i2.value.clamped(0,max_i2)
+
+      forEach (index in select{i1||0}..select{i2||max_i2})
+        local ch = text[index]
+        if (ch == '\n')
+          h += height
+          max_w = max_w.or_larger( w )
+          w = 0.0
+        else
+          local info = this[ ch ]
+          if (info) w += info.advance.x
+        endIf
+      endForEach
+
+      max_w = max_w.or_larger( w )
+      return XY( max_w, h )
+
+    method measure( ch:Character )->XY
+      if (ch == '\n') return XY(0,height)
+      local info = this[ ch ]
+      if (not info) return XY(0,0)
+      return info.advance
+
+    method unload
+      if (not is_loaded) return
+      is_loaded = false
+      forEach (ch in characters)
+        if (ch)
+          ch.image.unload
+        endIf
+      endForEach
+
+endClass
+
+
+class FontCharacter
+  PROPERTIES
+    unicode   : Character
+    image     : Image
+
+    size      : XY
+    offset    : XY  # Added to cursor during draw
+    advance   : XY  # Added to cursor after drawing
+
+  METHODS
+    method init( unicode, image )
+      size    = image.size
+      advance = size.xv
+
+      #{
+    method bounds->Box
+      return Box( top_left, size )
+      }#
+
+    method height->Int32 [macro]
+      Int32(size.y)
+
+    method width->Int32 [macro]
+      Int32(size.x)
+endClass
+
+#{
+class FontData
+  PROPERTIES
+    loader         : FontLoader
+    image          : Image  # Shared between all characters
+    height         : Int32
+    ascii          = FontCharacter[]( 128, null )
+    unicode_lookup : Table<<Character,FontCharacter>>  # Note: does not contain the ASCII characters
+
+  METHODS
+    method draw( font:Font, text:String, position:XY  )
+      prepare( text )
+
+      if (font.color.argb == 0xFFFFFFFF)
+        #image.shader = Shader.TEXTURE
+      else
+        #image.shader = Shader.TEXTURE_WITH_COLOR_MULTIPLY
+      endIf
+      image.color = font.color
+
+      local cursor = position - Box(text_size(text)*font.scale).at( font.anchor )
+      forEach (ch in text)
+        local info = this[ ch ]
+        if (info)
+          image.anchor = Anchor.TOP_LEFT
+          image.texture_bounds = info.bounds
+          image.size = info.size * font.scale
+          image.position = cursor+info.offset * font.scale
+          image.draw
+          cursor += info.advance * font.scale + XY(font.spacing,0) * font.scale
+        endIf
+      endForEach
+
+    method get( ch:Character )->FontCharacter
+      if (ch <= 127)      return ascii[ ch ]
+      if (unicode_lookup) return unicode_lookup[ ch ]
+      return null
+
+    method load( ch:Character )
+      noAction
+
+    method prepare( characters=null:String )
+      noAction
+
+    method text_size( text:String )->XY
+      local w = 0.0
+      forEach (ch in text)
+        local info = this[ ch ]
+        if (info) w += info.advance.x
+      endForEach
+      return XY( w, height )
+
+    method text_size( text:StringBuilder )->XY
+      local w = 0.0
+      forEach (ch in text)
+        local info = this[ ch ]
+        if (info) w += info.advance.x
+      endForEach
+      return XY( w, height )
+
+    method text_size( ch:Character )->XY
+      local info = this[ ch ]
+      if (not info) return XY(0,0)
+      return info.advance
+endClass
+}#
+
+#{
+class DynamicallyLoadedFontData : FontData
+  PROPERTIES
+    bitmap         : Bitmap
+    cursor_x=1     : Int32  # For writing new characters into the font bitmap
+    cursor_y=1     : Int32
+    is_modified    : Logical
+
+  METHODS
+    method init( loader, height )
+      bitmap = Bitmap( 1024, height+2 )
+
+    method load( ch:Character )
+      local info = this[ ch ]
+      if (info) return
+
+      is_modified = true
+      info = FontCharacter( this, ch )
+      info.size = XY(0,height)
+      local data = loader.load( info )
+      if (not data) return
+
+      local w = data.width
+
+      if (cursor_x + w+1 > bitmap.width)
+        cursor_x = 1
+        cursor_y += height+2
+        bitmap.add_rows( height+2 )
+      endIf
+
+      if (data.height > height)
+        # This character is taller than the nominal max height of the font.
+        # Make room for it and adjust the height.
+        bitmap.add_rows( data.height - height )
+        height = data.height
+      endIf
+
+      data.blit( bitmap, XY(cursor_x,cursor_y) )
+      bitmap.extend_edges( Box(cursor_x,cursor_y,w,height) )
+
+      info.top_left = XY( cursor_x, cursor_y )
+      if (ch <= 127)
+        ascii[ ch ] = info
+      else
+        if (not unicode_lookup) unicode_lookup = Table<<Character,FontCharacter>>()
+        unicode_lookup[ ch ] = info
+      endIf
+
+      cursor_x += w + 2
+
+    method prepare( characters=null:String )
+      if (characters)
+        forEach (ch in characters) load( ch )
+      endIf
+
+      if (not is_modified) return
+      is_modified = false
+
+      # Adjust all of the offsets to be non-negative, meaning the "pen position" is in
+      # the top-left corner.  This means that when a font character is first used
+      # that is higher than any other, all text being drawn in that font will appear
+      # to shift down a few pixels on screen.  The font being prepare()d with all ASCII
+      # letters *should* make this rare.
+      local max_negative_offset = XY(0,0)
+      forEach (info in ascii)
+        if (info) max_negative_offset = max_negative_offset.min( info.offset )
+      endForEach
+      if (unicode_lookup)
+        forEach (key in unicode_lookup.keys)
+          local info = unicode_lookup[ key ]
+          max_negative_offset = max_negative_offset.min( info.offset )
+        endForEach
+      endIf
+
+      if (max_negative_offset.x < 0 or max_negative_offset.y < 0)
+        local normalizing_offset = -max_negative_offset
+        forEach (info in ascii)
+          if (info) info.offset += normalizing_offset
+        endForEach
+        if (unicode_lookup)
+          forEach (key in unicode_lookup.keys)
+            local info = unicode_lookup[ key ]
+            info.offset += normalizing_offset
+          endForEach
+        endIf
+      endIf
+
+      if (image)
+        image.set( bitmap )
+      else
+        image = TextureImage( bitmap )
+      endIf
+
+endClass
+}#
+
+
+#{
+}#
+
+
+#{
+class FontLoader
+  PROPERTIES
+    name               : String
+    options            : ValueTable
+    error              : Logical
+    default_characters : String
+
+  METHODS
+    method create_font_data( height:Int32 )->FontData
+      throw UnsupportedOperationError( "FontLoader.create_font_data(Int32)" )
+
+    method load( info:FontCharacter )->Bitmap
+      return null
+
+    method nominal_height->Int32
+      return 16
+endClass
+
+
+class BitmapFontLoader : FontLoader
+  PROPERTIES
+    bitmap           : Bitmap
+    character_width  : Int32
+    character_height : Int32
+
+  METHODS
+    method init( name, options )
+      local filepath = Plasmacore.asset_filepath( name )
+      if (not filepath)
+        error = true
+        println ''ERROR loading bitmap font "$" - no such file.'' (name)
+        return
+      endIf
+
+      bitmap = Bitmap( File(filepath) )
+      if (bitmap.error)
+        error = true
+        println ''ERROR loading bitmap font "$" - failed to decode.'' (name)
+        return
+      endIf
+
+      if (options and options.contains("characters"))
+        default_characters = options[ "characters" ]->String
+      else
+        default_characters = String( (' '..'~')->Character[] )
+      endIf
+
+      character_width  = bitmap.width / default_characters.count
+      character_height = bitmap.height
+
+    method create_font_data( height:Int32 )->FontData
+      return DynamicallyLoadedFontData( this, height )
+
+    method load( info:FontCharacter )->Bitmap
+      local i = default_characters.locate( info.unicode )
+      if (not i.exists) return null
+
+      local pos  = XY( i.value * character_width, 0 )
+      local size = XY( character_width, character_height )
+
+      local bmp = Bitmap( bitmap, Box(pos,size) )
+
+      if (info.height and info.height != bmp.height)
+        # Resize the resulting bitmap to match the requested height
+        local scale = info.height / Real64(bmp.height)
+        bmp.resize( XY(scale*bmp.width,info.height) )
+      endIf
+
+      info.exists  = true
+      info.size    = bmp.size
+      info.advance = bmp.size.xv
+
+      return bmp
+
+    method nominal_height->Int32
+      return character_height
+endClass
+}#
+
+#{
+
+$if "Console"
+class TrueTypeFontLoader : FontLoader [essential]
+  DEPENDENCIES
+    nativeHeader
+      #include "ft2build.h"
+      #include FT_FREETYPE_H
+    endNativeHeader
+
+    nativeCode
+      FT_Library Plasmacore_freetype_library;
+    endNativeCode
+
+  PROPERTIES
+    native "FT_Face ft_face;"
+
+  METHODS
+    method init( name, options )
+      if (options and options.contains("characters"))
+        default_characters = options.string( "characters" )
+      else
+        default_characters = String( (' '..'~')->Character[] )
+      endIf
+
+      local filepath = Plasmacore.asset_filepath( name )
+      if (not filepath)
+        error = true
+        println ''ERROR loading TrueType font "$" - no such file.'' (name)
+        return
+      endIf
+
+      if (not native("Plasmacore_freetype_library")->Logical)
+        # Initialize FreeType library
+        if (native("FT_Init_FreeType(&Plasmacore_freetype_library)")->Int32)
+          error = true
+          throw Error( "FreeType library failed to initialize." )
+        endIf
+        on_exit( function native "FT_Done_FreeType( Plasmacore_freetype_library );" )
+      endIf
+
+      if (native("FT_New_Face( Plasmacore_freetype_library, (char*)$filepath->utf8, 0, &$this->ft_face )")->Int32)
+        error = true
+        throw Error( "Error loading $." (name) )
+        return
+      endIf
+
+    method create_font_data( height:Int32 )->FontData
+      return DynamicallyLoadedFontData( this, height )
+
+    method load( info:FontCharacter )->Bitmap
+      local w = info.size.x
+      local h = info.size.y
+      native "FT_Set_Pixel_Sizes( $this->ft_face, $w, $h );"
+      if (native("FT_Load_Char( $this->ft_face, $info->unicode, FT_LOAD_RENDER )")->Int32) return null
+
+      info.exists = true
+      w = native( "(RogueInt32)$this->ft_face->glyph->bitmap.width" )->Int32
+      h = native( "(RogueInt32)$this->ft_face->glyph->bitmap.rows" )->Int32
+      info.size = XY( w, h )
+
+      local offset_x = native( "(RogueInt32) $this->ft_face->glyph->bitmap_left" )->Int32
+      local offset_y = native( "(RogueInt32)-$this->ft_face->glyph->bitmap_top" )->Int32
+      info.offset = XY( offset_x, offset_y )
+
+      local advance_x = native( "(RogueInt32)$this->ft_face->glyph->advance.x" )->Int32
+      local advance_y = native( "(RogueInt32)$this->ft_face->glyph->advance.y" )->Int32
+      info.advance = XY( Real64(advance_x)/64.0, Real64(advance_y)/64.0 )
+
+      local pitch = native( "(RogueInt32)$this->ft_face->glyph->bitmap.pitch" )->Int32
+      native "RogueByte* src = (RogueByte*) $this->ft_face->glyph->bitmap.buffer;"
+      local bmp = Bitmap( w, h )
+      local src_i = 0
+      local dest_i = 0
+      local column_skip = pitch - bmp.width
+      forEach (j in 1..h)
+        forEach (i in 1..w)
+          local a = native( "(RogueInt32)(src[$src_i++])" )->Int32
+          bmp.pixels[dest_i] = Color(255,255,255,a)
+          ++dest_i
+        endForEach
+        src_i += column_skip
+      endForEach
+
+      return bmp
+
+endClass
+$endIf
+
+class FontManager [singleton]
+  PROPERTIES
+    loader_lookup    = Table<<String,FontLoader>>()
+
+  METHODS
+    method get_font_loader( font_name:String, options=null:ValueTable )->FontLoader
+      local loader = loader_lookup[ font_name ]
+      if (loader) return loader
+
+      local lc_name = font_name.to_lowercase
+      if (lc_name.ends_with(".png") or lc_name.ends_with(".jpg"))
+        loader = BitmapFontLoader( font_name, options )
+$if "Console"
+      elseIf (lc_name.ends_with(".ttf") or lc_name.ends_with(".otf"))
+        loader = TrueTypeFontLoader( font_name, options )
+$endIf
+      endIf
+
+      if (not loader or loader.error)
+        println ''ERROR loading font "$" - unsupported file type.'' (font_name)
+        return null
+      endIf
+
+      loader_lookup[ font_name ] = loader
+      return loader
+
+endClass
+
+augment Display
+  PROPERTIES
+    font_data_lookup = Table<<String,Table<<Int32,FontData>>>>()
+
+  METHODS
+    method get_font_data( font_name:String, font_height=null:Int32?, options=null:ValueTable )->FontData
+      if (not font_height.exists)
+        local loader = FontManager.get_font_loader( font_name )
+        if (not loader) return null
+        font_height = loader.nominal_height
+      endIf
+
+      local by_height = font_data_lookup[ font_name ]
+      if (by_height)
+        local result = by_height[ font_height.value ]
+        if (result) return result
+      else
+        by_height = Table<<Int32,FontData>>()
+        font_data_lookup[ font_name ] = by_height
+      endIf
+
+      local loader = FontManager.get_font_loader( font_name )
+      if (not loader) return null
+      local result = loader.create_font_data( font_height.value )
+      by_height[ font_height.value ] = result
+
+      # Preload the default characters - usually the 95 ASCII characters
+      result.prepare( loader.default_characters )
+
+      return result
+
+endAugment
+
+}#
