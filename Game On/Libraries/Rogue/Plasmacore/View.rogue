@@ -1,0 +1,249 @@
+module Plasmacore
+
+class View
+  PROPERTIES
+    state                 = State(this)
+    layers                = Layer[]
+
+    display               : Display
+    is_active             : Logical
+    needs_first_update    = true
+    previous_display_size : XY?
+
+    loaded_asset_count    : Int32
+    total_asset_count     : Int32
+
+    actions : ActionCmd
+
+  METHODS
+    method add( layer:Layer )->this
+      layers.add( layer )
+      return this
+
+    method after( e:KeyEvent )
+
+    method after( e:PointerEvent )
+
+    method after( e:ScrollEvent )
+
+    method after( e:TextEvent )
+
+    method after_draw
+
+    method after_resize
+
+    method after_update
+
+    method change_state( new_state:State )
+      local cur = new_state
+      while (cur.next_state) cur = cur.next_state
+      cur.next_state = state.next_state
+      state.next_state = null
+      new_state.prior_state = state.prior_state
+
+      new_state.on_prepare
+      state.on_finish
+      state.is_active = false
+      @state = new_state
+      state.view = this
+      state.is_active = true
+      state.on_start
+
+    method change_view( new_view:View )
+      new_view.display = display
+      new_view.on_prepare
+      forEach (layer in new_view.layers)
+        if (layer.is_visible) layer.on_prepare
+      endForEach
+      this.on_finish
+      forEach (layer in new_view.layers)
+        if (layer.is_visible) layer.on_finish
+      endForEach
+      this.is_active = false
+      display.view = new_view
+
+    method exit_state
+      local new_state : State
+      if (state.next_state)
+        new_state = state.next_state
+      elseIf (state.prior_state)
+        new_state = state.prior_state
+      else
+        new_state = State()
+      endIf
+
+      new_state.view = this
+      new_state.on_prepare
+
+      state.on_finish
+      state.is_active = false
+
+      new_state.is_active = true
+
+      if (state.next_state)
+        new_state.prior_state = state.prior_state
+        @state = new_state
+        state.on_start
+      elseIf (state.prior_state)
+        @state = new_state
+        state.on_resume
+      else
+        state.on_start
+      endIf
+
+    method handle( e:KeyEvent )
+      on( e )
+      if (e.is_consumed) return
+
+      if (layers.count)
+        forEach (layer in layers step -1)
+          if (layer.is_visible)
+            layer.on( e )
+            if (e.is_consumed) return
+          endIf
+        endForEach
+      endIf
+
+      after( e )
+
+    method handle( e:PointerEvent )
+      on( e )
+      if (e.is_consumed) return
+
+      if (layers.count)
+        forEach (layer in layers step -1)
+          if (layer.is_visible)
+            layer.on( e )
+            if (e.is_consumed) return
+          endIf
+        endForEach
+      endIf
+
+      after( e )
+
+    method handle( e:ScrollEvent )
+      on( e )
+      if (e.is_consumed) return
+
+      if (layers.count)
+        forEach (layer in layers step -1)
+          if (layer.is_visible)
+            layer.on( e )
+            if (e.is_consumed) return
+          endIf
+        endForEach
+      endIf
+
+      after( e )
+
+    method handle( e:TextEvent )
+      on( e )
+      if (e.is_consumed) return
+
+      if (layers.count)
+        forEach (layer in layers step -1)
+          if (layer.is_visible)
+            layer.on( e )
+            if (e.is_consumed) return
+          endIf
+        endForEach
+      endIf
+
+      after( e )
+
+    method handle_draw
+      on_draw
+      if (layers.count)
+        forEach (layer in layers)
+          if (layer.is_visible) layer.on_draw
+        endForEach
+      endIf
+      after_draw
+
+    method handle_resize
+      on_resize
+      if (layers.count)
+        forEach (layer in layers)
+          if (layer.is_visible) layer.on_resize
+        endForEach
+      endIf
+      after_resize
+
+    method handle_update
+      if (actions) actions = actions.update
+      on_update
+      if (layers.count)
+        forEach (layer in layers)
+          if (layer.actions) layer.actions = layer.actions.update
+          if (layer.is_visible) layer.on_update
+        endForEach
+      endIf
+      after_update
+
+    method load_another_asset->Real64
+      if (loaded_asset_count and loaded_asset_count == total_asset_count) return 1.0
+
+      loaded_asset_count = 0
+      total_asset_count = 0
+      forEach (p in type_info.properties)
+        if (p.type.is_reference)
+          local assets = get_property<<Assets>>( p.name )
+          if (assets)
+            if (not assets.finished_loading) assets.load_another
+            loaded_asset_count += assets.loaded_asset_count
+            total_asset_count += assets.total_asset_count
+          endIf
+        endIf
+      endForEach
+
+      if (total_asset_count == 0) return 1.0
+
+      return loaded_asset_count / Real64(total_asset_count)
+
+    method load_assets
+      local progress = 0.0
+      while (progress < 1.0)
+        progress = load_another_asset
+        Log.println "Loading assets $/$ ($%)" (loaded_asset_count,total_asset_count,(progress*100).format(0))
+      endWhile
+
+    method on( e:KeyEvent )
+
+    method on( e:PointerEvent )
+
+    method on( e:ScrollEvent )
+
+    method on( e:TextEvent )
+
+    method on_draw
+
+    method on_finish
+
+    method on_prepare
+
+    method on_resize
+
+    method on_start
+
+    method on_update
+
+    method push_state( new_state:State )
+      new_state.prior_state = state
+      state.is_active = false
+      state.on_suspend
+      @state = new_state
+      state.view = this
+      state.is_active = true
+      state.on_start
+
+    method queue_state( new_state:State )
+      local cur = state
+      while (cur.next_state) cur = cur.next_state
+      cur.next_state = new_state
+
+    method set_state( new_state:State )->this
+      change_state( new_state )
+      return this
+
+endClass
+
