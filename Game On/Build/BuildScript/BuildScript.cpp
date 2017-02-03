@@ -5843,7 +5843,7 @@ void Rogue_configure( int argc, const char* argv[] )
   Rogue_literal_strings[47] = (RogueString*) RogueObject_retain( RogueString_create_from_utf8( "which brew >& /dev/null", 23 ) ); 
   Rogue_literal_strings[48] = (RogueString*) RogueObject_retain( RogueString_create_from_utf8( "IDE", 3 ) ); 
   Rogue_literal_strings[49] = (RogueString*) RogueObject_retain( RogueString_create_from_utf8( "TARGET", 6 ) ); 
-  Rogue_literal_strings[50] = (RogueString*) RogueObject_retain( RogueString_create_from_utf8( "/Users/sabont/Desktop/Rogue-Master/BuildScriptCore.rogue", 56 ) ); 
+  Rogue_literal_strings[50] = (RogueString*) RogueObject_retain( RogueString_create_from_utf8( "/Users/sabont/PlasmacoreDemos/Game On/BuildScriptCore.rogue", 59 ) ); 
   Rogue_literal_strings[51] = (RogueString*) RogueObject_retain( RogueString_create_from_utf8( ":", 1 ) ); 
   Rogue_literal_strings[52] = (RogueString*) RogueObject_retain( RogueString_create_from_utf8( "-9223372036854775808", 20 ) ); 
   Rogue_literal_strings[53] = (RogueString*) RogueObject_retain( RogueString_create_from_utf8( ": error:Run 'make ", 18 ) ); 

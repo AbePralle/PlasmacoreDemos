@@ -15,7 +15,7 @@ class MainView : View
         println( "Mouse button $ pressed at $" (e.id,e.position) )
         if (hit_box.contains(e.position))
           Display.background_color = Random.color
-          hit_box = Box( (Random.xy(Display.bounds)-hit_box.size).clamped(Display.bounds), hit_box.size )
+          hit_box = Box( (Display.bounds.at_random-hit_box.size).clamped(Display.bounds), hit_box.size )
         endIf
       endIf
 

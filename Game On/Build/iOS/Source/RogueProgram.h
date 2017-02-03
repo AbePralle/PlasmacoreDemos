@@ -4769,7 +4769,6 @@ void RogueRandom__reset__Int64( RogueClassRandom* THIS, RogueInt64 _auto_474_0 )
 RogueReal64 RogueRandom__real64( RogueClassRandom* THIS );
 RogueReal64 RogueRandom__real64__Real64_Real64( RogueClassRandom* THIS, RogueReal64 low_0, RogueReal64 high_1 );
 RogueClassPlasmacore__Color RogueRandom__color( RogueClassRandom* THIS );
-RogueClassPlasmacore__XY RogueRandom__xy__Plasmacore__Box( RogueClassRandom* THIS, RogueClassPlasmacore__Box bounding_box_0 );
 RogueClassListWriter_Byte_* RogueListWriter_Byte___init_object( RogueClassListWriter_Byte_* THIS );
 RogueString* RogueListWriter_Byte___type_name( RogueClassListWriter_Byte_* THIS );
 RogueInt32 RogueListWriter_Byte___position( RogueClassListWriter_Byte_* THIS );
@@ -5053,6 +5052,7 @@ RogueString* RoguePlasmacore__XY__to_String( RogueClassPlasmacore__XY THIS );
 RogueClassPlasmacore__XY RoguePlasmacore__XY__xv( RogueClassPlasmacore__XY THIS );
 RogueClassPlasmacore__XY RoguePlasmacore__XY__yv( RogueClassPlasmacore__XY THIS );
 RogueClassPlasmacore__XY RoguePlasmacore__Box__at__Plasmacore__Anchor( RogueClassPlasmacore__Box THIS, RogueClassPlasmacore__Anchor anchor_0 );
+RogueClassPlasmacore__XY RoguePlasmacore__Box__at_random( RogueClassPlasmacore__Box THIS );
 RogueClassPlasmacore__XY RoguePlasmacore__Box__bottom_left( RogueClassPlasmacore__Box THIS );
 RogueClassPlasmacore__XY RoguePlasmacore__Box__bottom_right( RogueClassPlasmacore__Box THIS );
 RogueLogical RoguePlasmacore__Box__contains__Plasmacore__XY( RogueClassPlasmacore__Box THIS, RogueClassPlasmacore__XY pos_0 );

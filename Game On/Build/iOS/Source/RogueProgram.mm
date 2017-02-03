@@ -21292,7 +21292,7 @@ void RogueMainView__on__Plasmacore__PointerEvent( RogueClassMainView* THIS, Rogu
     if (((RoguePlasmacore__Box__contains__Plasmacore__XY( ROGUE_ARG(THIS->hit_box), ROGUE_ARG(e_0->position) ))))
     {
       ((RogueClassPlasmacore__Display*)ROGUE_SINGLETON(Plasmacore__Display))->background_color = ((RogueRandom__color( ((RogueClassRandom*)ROGUE_SINGLETON(Random)) )));
-      THIS->hit_box = RogueClassPlasmacore__Box( ((RoguePlasmacore__XY__clamped__Plasmacore__Box( ROGUE_ARG(((RoguePlasmacore__XY__operatorMINUS__Plasmacore__XY( ROGUE_ARG(((RogueRandom__xy__Plasmacore__Box( ((RogueClassRandom*)ROGUE_SINGLETON(Random)), ROGUE_ARG(((RoguePlasmacore__Display__bounds( ((RogueClassPlasmacore__Display*)ROGUE_SINGLETON(Plasmacore__Display)) )))) )))), ROGUE_ARG(THIS->hit_box.size) )))), ROGUE_ARG(((RoguePlasmacore__Display__bounds( ((RogueClassPlasmacore__Display*)ROGUE_SINGLETON(Plasmacore__Display)) )))) ))), THIS->hit_box.size );
+      THIS->hit_box = RogueClassPlasmacore__Box( ((RoguePlasmacore__XY__clamped__Plasmacore__Box( ROGUE_ARG(((RoguePlasmacore__XY__operatorMINUS__Plasmacore__XY( ROGUE_ARG(((RoguePlasmacore__Box__at_random( ROGUE_ARG(((RoguePlasmacore__Display__bounds( ((RogueClassPlasmacore__Display*)ROGUE_SINGLETON(Plasmacore__Display)) )))) )))), ROGUE_ARG(THIS->hit_box.size) )))), ROGUE_ARG(((RoguePlasmacore__Display__bounds( ((RogueClassPlasmacore__Display*)ROGUE_SINGLETON(Plasmacore__Display)) )))) ))), THIS->hit_box.size );
     }
   }
 }
@@ -25322,13 +25322,6 @@ RogueClassPlasmacore__Color RogueRandom__color( RogueClassRandom* THIS )
   return (RogueClassPlasmacore__Color)((RoguePlasmacore__Color__create__Real64_Real64_Real64_Real64( ROGUE_ARG(((RogueRandom__real64( ROGUE_ARG(THIS) )))), ROGUE_ARG(((RogueRandom__real64( ROGUE_ARG(THIS) )))), ROGUE_ARG(((RogueRandom__real64( ROGUE_ARG(THIS) )))), 1.0 )));
 }
 
-RogueClassPlasmacore__XY RogueRandom__xy__Plasmacore__Box( RogueClassRandom* THIS, RogueClassPlasmacore__Box bounding_box_0 )
-{
-  RogueClassPlasmacore__XY start_1 = (bounding_box_0.position);
-  RogueClassPlasmacore__XY end_2 = (((RoguePlasmacore__XY__operatorPLUS__Plasmacore__XY( ROGUE_ARG(bounding_box_0.size), ROGUE_ARG(bounding_box_0.position) ))));
-  return (RogueClassPlasmacore__XY)(RogueClassPlasmacore__XY( ((RogueRandom__real64__Real64_Real64( ROGUE_ARG(THIS), ROGUE_ARG(start_1.x), ROGUE_ARG(end_2.x) ))), ((RogueRandom__real64__Real64_Real64( ROGUE_ARG(THIS), ROGUE_ARG(start_1.y), ROGUE_ARG(end_2.y) ))) ));
-}
-
 RogueClassListWriter_Byte_* RogueListWriter_Byte___init_object( RogueClassListWriter_Byte_* THIS )
 {
   RogueObject__init_object( ROGUE_ARG(((RogueObject*)THIS)) );
@@ -27911,6 +27904,12 @@ RogueClassPlasmacore__XY RoguePlasmacore__XY__yv( RogueClassPlasmacore__XY THIS 
 RogueClassPlasmacore__XY RoguePlasmacore__Box__at__Plasmacore__Anchor( RogueClassPlasmacore__Box THIS, RogueClassPlasmacore__Anchor anchor_0 )
 {
   return (RogueClassPlasmacore__XY)(((RoguePlasmacore__XY__operatorPLUS__Plasmacore__XY( ROGUE_ARG(THIS.position), ROGUE_ARG(((RoguePlasmacore__XY__operatorTIMES__Plasmacore__XY( ROGUE_ARG(anchor_0.position), ROGUE_ARG(THIS.size) )))) ))));
+}
+
+RogueClassPlasmacore__XY RoguePlasmacore__Box__at_random( RogueClassPlasmacore__Box THIS )
+{
+  RogueClassPlasmacore__XY upper_0 = (((RoguePlasmacore__XY__operatorPLUS__Plasmacore__XY( ROGUE_ARG(THIS.size), ROGUE_ARG(THIS.position) ))));
+  return (RogueClassPlasmacore__XY)(RogueClassPlasmacore__XY( ((RogueRandom__real64__Real64_Real64( ((RogueClassRandom*)ROGUE_SINGLETON(Random)), ROGUE_ARG(THIS.position.x), ROGUE_ARG(((THIS.size.x) + (THIS.position.x))) ))), ((RogueRandom__real64__Real64_Real64( ((RogueClassRandom*)ROGUE_SINGLETON(Random)), ROGUE_ARG(THIS.position.y), ROGUE_ARG(((THIS.size.y) + (THIS.position.y))) ))) ));
 }
 
 RogueClassPlasmacore__XY RoguePlasmacore__Box__bottom_left( RogueClassPlasmacore__Box THIS )
