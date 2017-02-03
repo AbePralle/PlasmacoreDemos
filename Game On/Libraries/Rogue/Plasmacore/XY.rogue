@@ -269,11 +269,6 @@ augment Random
       # the range (low,high) exclusive (does not include low or high).
       # for each of the (x,y) values.
       return XY((real64 * (high-low)) + low,(real64 * (high-low)) + low)
-
-    method xy( bounding_box:Box)->XY
-      local start = bounding_box.position
-      local end = bounding_box.size+bounding_box.position
-    return XY(real64(start.x,end.x),real64(start.y,end.y))
 endAugment
 
 
